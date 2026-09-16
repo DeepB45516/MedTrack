@@ -32,6 +32,34 @@ Run tests:
 python -m pytest -v
 ```
 
+## Deploy to Render (Demo Use)
+
+MedTrack includes native support for **[Render](https://render.com/)** free tier web service deployments:
+
+1. **Push to your GitHub repository** (already done).
+2. Go to [Render Dashboard](https://dashboard.render.com/) and click **New +** → **Web Service**.
+3. Connect your repository: `https://github.com/DeepB45516/MedTrack.git`.
+4. Configure settings:
+   - **Name**: `medtrack` (or your choice)
+   - **Language**: `Python 3`
+   - **Branch**: `main`
+   - **Build Command**: `pip install -r requirements.txt && python -m database.seed`
+   - **Start Command**: `gunicorn "app:app"`
+   - **Instance Type**: `Free`
+5. Click **Create Web Service**.
+
+> Render will automatically detect the provided `render.yaml` Blueprint or `Procfile`. The database and demo accounts are seeded automatically on first boot!
+
+### Quick Demo Accounts
+
+| Role | Email | Password |
+|---|---|---|
+| **Patient** | `patient@medtrack.demo` | `password123` |
+| **Doctor** | `priya.nair@medtrack.demo` | `password123` |
+| **Admin** | `admin@medtrack.demo` | `password123` |
+
+*(You can also use the 1-click autofill buttons on the `/login` page or create a new account via `/signup`)*
+
 ## Google OAuth setup
 
 1. In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials),

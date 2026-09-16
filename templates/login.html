@@ -53,7 +53,32 @@
       Continue with Google
     </a>
 
-    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--mt-line); font-size: 0.88rem;">
+    <!-- Demo Accounts Quick Fill (Ideal for live Render demo testing) -->
+    <div class="mt-demo-accounts-box">
+      <div class="mt-demo-accounts-title">
+        <i class="bi bi-person-badge"></i> Quick Demo Logins
+      </div>
+      <div class="mt-demo-buttons-row">
+        <button type="button" class="mt-demo-btn" onclick="fillDemo('patient@medtrack.demo', 'password123')">
+          <i class="bi bi-person-fill"></i> Patient
+        </button>
+        <button type="button" class="mt-demo-btn" onclick="fillDemo('priya.nair@medtrack.demo', 'password123')">
+          <i class="bi bi-heart-pulse-fill"></i> Doctor
+        </button>
+        <button type="button" class="mt-demo-btn" onclick="fillDemo('admin@medtrack.demo', 'password123')">
+          <i class="bi bi-shield-lock-fill"></i> Admin
+        </button>
+      </div>
+    </div>
+
+    <script>
+      function fillDemo(email, pwd) {
+        document.getElementById('email').value = email;
+        document.getElementById('password').value = pwd;
+      }
+    </script>
+
+    <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--mt-line); font-size: 0.88rem;">
       <span style="color: var(--mt-ink-soft);">Don't have an account?</span>
       <a href="{{ url_for('main.signup') }}" style="color: var(--mt-teal-700); font-weight: 600; text-decoration: none; margin-left: 4px;">Sign up</a>
     </div>

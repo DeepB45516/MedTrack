@@ -33,6 +33,19 @@ def create_app():
         init_db(conn)
         conn.close()
 
+        # For demo deployments (e.g. Render), auto-seed demo accounts if empty
+        if not app.config.get("TESTING", False):
+            try:
+                conn = sqlite3.connect(app.config["DATABASE_PATH"])
+                cur = conn.cursor()
+                user_count = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+                conn.close()
+                if user_count == 0:
+                    from database.seed import seed
+                    seed()
+            except Exception as e:
+                app.logger.warning("Auto-seed error: %s", e)
+
     register_context_processors(app)
     register_error_handlers(app)
     register_routes(app)
@@ -460,4 +473,5 @@ def register_routes(app):
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)

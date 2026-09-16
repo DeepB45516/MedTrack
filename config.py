@@ -15,7 +15,7 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY", "change-me")
+    SECRET_KEY = os.environ.get("SECRET_KEY") or "medtrack-secure-demo-secret-key-render-2026"
 
     # --- Database -----------------------------------------------------
     DATABASE_URL = os.environ.get(

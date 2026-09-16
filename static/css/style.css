@@ -1699,6 +1699,56 @@ footer.mt-footer-pro {
   box-shadow: 0 0 0 3.5px rgba(19, 94, 86, 0.14);
 }
 
+.mt-demo-accounts-box {
+  margin-top: 20px;
+  padding: 14px 12px;
+  background: #F0F7FD;
+  border: 1px solid #BAE6FD;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.mt-demo-accounts-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #0288D1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mt-demo-buttons-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.mt-demo-btn {
+  background: #FFFFFF;
+  border: 1px solid #90CAF9;
+  color: #0B3C74;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 7px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.mt-demo-btn:hover {
+  background: #0288D1;
+  color: #FFFFFF;
+  border-color: #0288D1;
+}
+
 /* ==========================================================================
    Utilities & Responsiveness
    ========================================================================== */
