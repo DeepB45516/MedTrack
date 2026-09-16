@@ -12,3 +12,5 @@ services:
         generateValue: true
       - key: FLASK_ENV
         value: production
+      - key: KEEP_ALIVE_INTERVAL_MINUTES
+        value: "8"

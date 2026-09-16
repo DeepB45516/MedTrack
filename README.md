@@ -60,6 +60,15 @@ MedTrack includes native support for **[Render](https://render.com/)** free tier
 
 *(You can also use the 1-click autofill buttons on the `/login` page or create a new account via `/signup`)*
 
+### Keeping the Free Tier Render Web Service Awake
+
+Render's free tier automatically suspends web services after 15 minutes of inactivity. MedTrack includes built-in support to keep the service running continuously:
+
+1. **Automatic Built-in Keep-Alive**:
+   When deployed on Render, MedTrack's background service (`services/keep_alive.py`) automatically detects `RENDER_EXTERNAL_URL` and sends an HTTP ping to `/health` every 8 minutes (configurable via `KEEP_ALIVE_INTERVAL_MINUTES=8`), preventing Render from idling down.
+2. **External Monitor (Optional 100% Uptime Fallback)**:
+   You can also paste `https://<your-service>.onrender.com/health` into a free monitor like **[UptimeRobot](https://uptimerobot.com/)** or **[cron-job.org](https://cron-job.org/)** with a 5-minute interval.
+
 ## Google OAuth setup
 
 1. In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials),

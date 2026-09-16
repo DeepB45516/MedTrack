@@ -50,6 +50,10 @@ def create_app():
     register_error_handlers(app)
     register_routes(app)
 
+    if not app.config.get("TESTING", False):
+        from services.keep_alive import start_keep_alive
+        start_keep_alive(app)
+
     return app
 
 
