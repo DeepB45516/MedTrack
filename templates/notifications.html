@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block page_title %}Notifications{% endblock %}
+{% block content %}
+
+{% if notifications %}
+<div class="mt-card-list">
+  {% for n in notifications %}
+  <div class="mt-card" style="display:flex; justify-content:space-between; align-items:center; {{ 'opacity:0.6;' if n.is_read }}">
+    <div>
+      {{ n.message }}
+      <div style="font-size:0.78rem; color:var(--mt-ink-soft); margin-top:4px;">{{ n.created_at }}</div>
+    </div>
+    {% if not n.is_read %}
+    <form method="POST" action="{{ url_for('main.mark_notification_read', notification_id=n.id) }}">
+      <button type="submit" class="mt-btn mt-btn-outline mt-btn-sm">Mark read</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="mt-empty">No notifications yet.</div>
+{% endif %}
+
+{% endblock %}

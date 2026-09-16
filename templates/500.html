@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Something went wrong — MedTrack{% endblock %}
+{% block public_content %}
+<div class="mt-auth-shell">
+  <div class="mt-auth-card">
+    <h2 class="mt-display">Something went wrong</h2>
+    <p style="color:var(--mt-ink-soft);">An unexpected error occurred. Please try again.</p>
+    <a href="{{ url_for('main.index') }}" class="mt-btn mt-btn-primary" style="margin-top:10px;">Go home</a>
+  </div>
+</div>
+{% endblock %}
+{% block content %}
+<div class="mt-empty">
+  <h2 class="mt-display">Something went wrong</h2>
+  <p>An unexpected error occurred. Please try again.</p>
+  <a href="{{ url_for('main.dashboard_redirect') }}" class="mt-btn mt-btn-primary">Back to dashboard</a>
+</div>
+{% endblock %}

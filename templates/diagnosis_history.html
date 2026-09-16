@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block page_title %}Medical & Diagnostic Records{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+  <div>
+    <h2 class="mt-display mb-1">Diagnostic Records Archive</h2>
+    <p style="color:var(--mt-ink-soft); margin:0;">Encrypted pathology reports, imaging scans, and clinical evaluations.</p>
+  </div>
+  {% if current_user.role == 'patient' %}
+  <div>
+    <a href="{{ url_for('main.submit_diagnosis') }}" class="mt-btn mt-btn-primary">
+      <i class="bi bi-upload"></i> Upload new report
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+{% if diagnoses %}
+<div class="mt-table-wrap">
+  <table class="mt-table">
+    <thead>
+      <tr>
+        {% if current_user.role != 'patient' %}<th>Patient</th>{% endif %}
+        {% if current_user.role != 'doctor' %}<th>Healthcare Provider</th>{% endif %}
+        <th>Document</th>
+        <th>Clinical Notes</th>
+        <th>Status</th>
+        <th>Uploaded</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in diagnoses %}
+      <tr>
+        {% if current_user.role != 'patient' %}
+        <td>
+          <div class="mt-table-user">
+            <div class="mt-table-avatar" style="background:var(--mt-blue-bg); color:var(--mt-blue);">{{ d.patient_name[0] }}</div>
+            <span class="fw-semibold">{{ d.patient_name }}</span>
+          </div>
+        </td>
+        {% endif %}
+
+        {% if current_user.role != 'doctor' %}
+        <td>
+          {% if d.doctor_name %}
+            <span class="fw-semibold">Dr. {{ d.doctor_name }}</span>
+          {% else %}
+            <span class="text-muted">Unassigned</span>
+          {% endif %}
+        </td>
+        {% endif %}
+
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-pdf-fill text-danger fs-5"></i>
+            <span class="fw-medium">{{ d.file_name }}</span>
+          </div>
+        </td>
+
+        <td style="max-width: 260px;">
+          <span class="text-truncate d-inline-block" style="max-width:240px;" title="{{ d.description or '' }}">
+            {{ d.description or '—' }}
+          </span>
+        </td>
+
+        <td>
+          <span class="mt-status mt-status-{{ 'confirmed' if d.status == 'reviewed' else 'pending' }}">
+            <span class="mt-status-dot"></span> {{ d.status|capitalize }}
+          </span>
+        </td>
+
+        <td><i class="bi bi-calendar3 me-1 text-muted"></i> {{ d.uploaded_at }}</td>
+
+        <td>
+          <a href="{{ url_for('main.download_diagnosis', diagnosis_id=d.id) }}" class="mt-btn mt-btn-outline mt-btn-sm">
+            <i class="bi bi-download"></i> Download
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="mt-empty">
+  <i class="bi bi-folder2-open"></i>
+  <strong>No diagnostic records found.</strong>
+  <p class="mt-1 mb-0 text-muted">Uploaded laboratory results and clinical documentation will be catalogued here.</p>
+</div>
+{% endif %}
+
+{% endblock %}

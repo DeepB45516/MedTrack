@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block page_title %}Appointment details{% endblock %}
+{% block content %}
+
+<div class="mt-card mt-form-card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <h2 class="mt-display" style="margin-top:0;">Dr. {{ appointment.doctor_name }}</h2>
+    <span class="mt-status mt-status-{{ appointment.status }}">{{ appointment.status|capitalize }}</span>
+  </div>
+  <p style="color:var(--mt-ink-soft); margin-top:-8px;">{{ appointment.specialization }}</p>
+
+  <p><strong>Date:</strong> {{ appointment.appointment_date }}</p>
+  <p><strong>Time:</strong> {{ appointment.appointment_time }}</p>
+  <p><strong>Reason:</strong> {{ appointment.reason or 'Not specified' }}</p>
+  <p><strong>Requested:</strong> {{ appointment.created_at }}</p>
+
+  {% if appointment.status in ['pending', 'confirmed'] %}
+  <form method="POST" action="{{ url_for('main.cancel_appointment', appointment_id=appointment.id) }}"
+        data-confirm="Cancel this appointment?" style="margin-top: 18px;">
+    <button type="submit" class="mt-btn mt-btn-danger">Cancel appointment</button>
+  </form>
+  {% endif %}
+
+  <a href="{{ url_for('main.appointments') }}" style="display:block; margin-top:16px; font-size:0.86rem; color:var(--mt-teal-700); font-weight:600;">← Back to appointments</a>
+</div>
+
+{% endblock %}

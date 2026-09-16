@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block page_title %}
+  {%- if users_view %}Users Directory{% elif doctors_view %}Medical Staff{% elif appts_view %}All Appointments{% else %}Administration Console{% endif -%}
+{% endblock %}
+{% block content %}
+
+{% if stats %}
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+      <h2 class="mt-display mb-1">Clinical Operations Overview</h2>
+      <p style="color:var(--mt-ink-soft); margin:0;">Platform usage analytics, active users, medical staff, and consultation metrics.</p>
+    </div>
+  </div>
+
+  <div class="mt-stat-grid">
+    <div class="mt-stat">
+      <div class="mt-stat-header">
+        <span class="mt-stat-label">Total Accounts</span>
+        <div class="mt-stat-icon mt-stat-icon-teal"><i class="bi bi-people-fill"></i></div>
+      </div>
+      <div class="mt-stat-value">{{ stats.total_users }}</div>
+    </div>
+
+    <div class="mt-stat">
+      <div class="mt-stat-header">
+        <span class="mt-stat-label">Licensed Doctors</span>
+        <div class="mt-stat-icon mt-stat-icon-blue"><i class="bi bi-hospital-fill"></i></div>
+      </div>
+      <div class="mt-stat-value">{{ stats.total_doctors }}</div>
+    </div>
+
+    <div class="mt-stat">
+      <div class="mt-stat-header">
+        <span class="mt-stat-label">Registered Patients</span>
+        <div class="mt-stat-icon mt-stat-icon-emerald"><i class="bi bi-person-heart"></i></div>
+      </div>
+      <div class="mt-stat-value">{{ stats.total_patients }}</div>
+    </div>
+
+    <div class="mt-stat">
+      <div class="mt-stat-header">
+        <span class="mt-stat-label">Total Appointments</span>
+        <div class="mt-stat-icon mt-stat-icon-amber"><i class="bi bi-calendar-check-fill"></i></div>
+      </div>
+      <div class="mt-stat-value">{{ stats.total_appointments }}</div>
+    </div>
+  </div>
+
+  <div class="mt-section-heading">
+    <span><i class="bi bi-activity me-2"></i> Recent Consultation Activity</span>
+  </div>
+
+  {% if recent_appointments %}
+  <div class="mt-table-wrap">
+    <table class="mt-table">
+      <thead>
+        <tr>
+          <th>Patient</th>
+          <th>Attending Physician</th>
+          <th>Consultation Date</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in recent_appointments %}
+        <tr>
+          <td>
+            <div class="mt-table-user">
+              <div class="mt-table-avatar" style="background:var(--mt-blue-bg); color:var(--mt-blue);">{{ a.patient_name[0] }}</div>
+              <span class="fw-semibold">{{ a.patient_name }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="fw-medium">Dr. {{ a.doctor_name }}</span>
+          </td>
+          <td><i class="bi bi-calendar3 me-1 text-muted"></i> {{ a.appointment_date }}</td>
+          <td>
+            <span class="mt-status mt-status-{{ a.status }}">
+              <span class="mt-status-dot"></span> {{ a.status|capitalize }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="mt-empty">
+    <i class="bi bi-calendar-x"></i>
+    <span>No appointment activity recorded yet.</span>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% if users_view %}
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mt-display mb-1">User Directory</h2>
+      <p style="color:var(--mt-ink-soft); margin:0;">All registered patients, doctors, and system administrators.</p>
+    </div>
+  </div>
+
+  <div class="mt-table-wrap">
+    <table class="mt-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Email</th>
+          <th>System Role</th>
+          <th>Registered</th>
+          <th>Last Activity</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <div class="mt-table-user">
+              <div class="mt-table-avatar">{{ u.name[0] }}</div>
+              <span class="fw-semibold">{{ u.name }}</span>
+            </div>
+          </td>
+          <td>{{ u.email }}</td>
+          <td>
+            <span class="badge {% if u.role == 'doctor' %}bg-primary{% elif u.role == 'admin' %}bg-dark{% else %}bg-secondary{% endif %}">
+              {{ u.role|capitalize }}
+            </span>
+          </td>
+          <td><i class="bi bi-calendar3 me-1 text-muted"></i> {{ u.created_at }}</td>
+          <td><i class="bi bi-clock me-1 text-muted"></i> {{ u.last_login or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% if doctors_view %}
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mt-display mb-1">Medical Staff Roster</h2>
+      <p style="color:var(--mt-ink-soft); margin:0;">Active clinical practitioners, medical specializations, and schedule availability.</p>
+    </div>
+  </div>
+
+  <div class="mt-table-wrap">
+    <table class="mt-table">
+      <thead>
+        <tr>
+          <th>Physician</th>
+          <th>Specialization</th>
+          <th>Contact Email</th>
+          <th>Clinic Hours</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in doctors %}
+        <tr>
+          <td>
+            <div class="mt-table-user">
+              <div class="mt-table-avatar">{{ d.name[0] }}</div>
+              <span class="fw-semibold">Dr. {{ d.name }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="badge bg-light text-dark border px-2 py-1">{{ d.specialization }}</span>
+          </td>
+          <td>{{ d.email }}</td>
+          <td><i class="bi bi-clock me-1 text-muted"></i> {{ d.availability or 'Mon-Fri 9:00-17:00' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% if appts_view %}
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mt-display mb-1">Central Appointments Ledger</h2>
+      <p style="color:var(--mt-ink-soft); margin:0;">System-wide log of all patient and provider consultations.</p>
+    </div>
+  </div>
+
+  <div class="mt-table-wrap">
+    <table class="mt-table">
+      <thead>
+        <tr>
+          <th>Patient</th>
+          <th>Doctor</th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in appts %}
+        <tr>
+          <td>
+            <div class="mt-table-user">
+              <div class="mt-table-avatar" style="background:var(--mt-blue-bg); color:var(--mt-blue);">{{ a.patient_name[0] }}</div>
+              <span class="fw-semibold">{{ a.patient_name }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="fw-medium">Dr. {{ a.doctor_name }}</span>
+          </td>
+          <td><i class="bi bi-calendar3 me-1 text-muted"></i> {{ a.appointment_date }}</td>
+          <td><i class="bi bi-clock me-1 text-muted"></i> {{ a.appointment_time }}</td>
+          <td>
+            <span class="mt-status mt-status-{{ a.status }}">
+              <span class="mt-status-dot"></span> {{ a.status|capitalize }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% endblock %}

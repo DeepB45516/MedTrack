@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block page_title %}Patient Dashboard{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+  <div>
+    <h2 class="mt-display mb-1">Welcome back, {{ current_user.name.split(' ')[0] }}</h2>
+    <p style="color:var(--mt-ink-soft); margin:0;">Here is your personal clinical summary and upcoming care schedule.</p>
+  </div>
+  <div class="mt-hero-actions">
+    <a href="{{ url_for('main.book_appointment') }}" class="mt-btn mt-btn-primary">
+      <i class="bi bi-calendar-plus"></i> Book an appointment
+    </a>
+    <a href="{{ url_for('main.submit_diagnosis') }}" class="mt-btn mt-btn-outline">
+      <i class="bi bi-upload"></i> Submit diagnosis report
+    </a>
+  </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="mt-stat-grid">
+  <div class="mt-stat">
+    <div class="mt-stat-header">
+      <span class="mt-stat-label">Total Appointments</span>
+      <div class="mt-stat-icon mt-stat-icon-teal"><i class="bi bi-calendar2-check-fill"></i></div>
+    </div>
+    <div class="mt-stat-value">{{ counts.total or 0 }}</div>
+  </div>
+
+  <div class="mt-stat">
+    <div class="mt-stat-header">
+      <span class="mt-stat-label">Upcoming Visits</span>
+      <div class="mt-stat-icon mt-stat-icon-blue"><i class="bi bi-clock-history"></i></div>
+    </div>
+    <div class="mt-stat-value">{{ counts.upcoming or 0 }}</div>
+  </div>
+
+  <div class="mt-stat">
+    <div class="mt-stat-header">
+      <span class="mt-stat-label">Pending Confirmation</span>
+      <div class="mt-stat-icon mt-stat-icon-amber"><i class="bi bi-hourglass-split"></i></div>
+    </div>
+    <div class="mt-stat-value">{{ counts.pending or 0 }}</div>
+  </div>
+
+  <div class="mt-stat">
+    <div class="mt-stat-header">
+      <span class="mt-stat-label">Completed Visits</span>
+      <div class="mt-stat-icon mt-stat-icon-emerald"><i class="bi bi-check2-circle"></i></div>
+    </div>
+    <div class="mt-stat-value">{{ counts.completed or 0 }}</div>
+  </div>
+</div>
+
+<!-- Upcoming Appointments -->
+<div class="mt-section-heading">
+  <span><i class="bi bi-calendar-event me-2"></i> Upcoming Appointments</span>
+  {% if upcoming %}
+    <a href="{{ url_for('main.appointments') }}" class="btn btn-sm btn-link text-decoration-none" style="color:var(--mt-teal-700); font-weight:600;">View all</a>
+  {% endif %}
+</div>
+
+{% if upcoming %}
+<div class="mt-table-wrap">
+  <table class="mt-table">
+    <thead>
+      <tr>
+        <th>Practitioner</th>
+        <th>Specialization</th>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in upcoming %}
+      <tr>
+        <td>
+          <div class="mt-table-user">
+            <div class="mt-table-avatar">{{ a.doctor_name[0] }}</div>
+            <div>
+              <a href="{{ url_for('main.view_appointment', appointment_id=a.id) }}" class="fw-semibold text-dark">
+                Dr. {{ a.doctor_name }}
+              </a>
+            </div>
+          </div>
+        </td>
+        <td>
+          <span class="badge bg-light text-dark border px-2 py-1">{{ a.specialization }}</span>
+        </td>
+        <td><i class="bi bi-calendar3 me-1 text-muted"></i> {{ a.appointment_date }}</td>
+        <td><i class="bi bi-clock me-1 text-muted"></i> {{ a.appointment_time }}</td>
+        <td>
+          <span class="mt-status mt-status-{{ a.status }}">
+            <span class="mt-status-dot"></span> {{ a.status|capitalize }}
+          </span>
+        </td>
+        <td>
+          <a href="{{ url_for('main.view_appointment', appointment_id=a.id) }}" class="mt-btn mt-btn-outline mt-btn-sm">
+            View
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="mt-empty">
+  <i class="bi bi-calendar-x"></i>
+  <strong>No upcoming visits scheduled.</strong>
+  <p class="mt-1 mb-3 text-muted">You do not have any active appointments lined up.</p>
+  <a href="{{ url_for('main.book_appointment') }}" class="mt-btn mt-btn-primary mt-btn-sm">
+    <i class="bi bi-calendar-plus"></i> Book your first visit
+  </a>
+</div>
+{% endif %}
+
+<!-- Recent Diagnosis Reports -->
+<div class="mt-section-heading">
+  <span><i class="bi bi-file-earmark-medical me-2"></i> Recent Diagnosis Reports</span>
+  {% if diagnoses %}
+    <a href="{{ url_for('main.diagnosis_history') }}" class="btn btn-sm btn-link text-decoration-none" style="color:var(--mt-teal-700); font-weight:600;">View all</a>
+  {% endif %}
+</div>
+
+{% if diagnoses %}
+<div class="mt-table-wrap">
+  <table class="mt-table">
+    <thead>
+      <tr>
+        <th>Document</th>
+        <th>Assigned Physician</th>
+        <th>Review Status</th>
+        <th>Submission Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in diagnoses %}
+      <tr>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-pdf-fill text-danger fs-5"></i>
+            <span class="fw-semibold">{{ d.file_name }}</span>
+          </div>
+        </td>
+        <td>
+          {% if d.doctor_name %}
+            <span class="fw-medium">Dr. {{ d.doctor_name }}</span>
+          {% else %}
+            <span class="text-muted">Unassigned</span>
+          {% endif %}
+        </td>
+        <td>
+          <span class="mt-status mt-status-{{ 'confirmed' if d.status == 'reviewed' else 'pending' }}">
+            <span class="mt-status-dot"></span> {{ d.status|capitalize }}
+          </span>
+        </td>
+        <td><i class="bi bi-clock-history me-1 text-muted"></i> {{ d.uploaded_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="mt-empty">
+  <i class="bi bi-file-earmark-arrow-up"></i>
+  <strong>No diagnosis reports on file.</strong>
+  <p class="mt-1 mb-3 text-muted">Attach lab test results or diagnostic scans for your doctor to review.</p>
+  <a href="{{ url_for('main.submit_diagnosis') }}" class="mt-btn mt-btn-outline mt-btn-sm">
+    <i class="bi bi-upload"></i> Upload a report
+  </a>
+</div>
+{% endif %}
+
+<!-- Notifications -->
+<div class="mt-section-heading">
+  <span><i class="bi bi-bell me-2"></i> Notifications</span>
+</div>
+
+{% if notifications %}
+<div class="mt-card-list">
+  {% for n in notifications %}
+  <div class="mt-card p-3 d-flex align-items-start gap-3">
+    <div class="mt-stat-icon mt-stat-icon-teal flex-shrink-0" style="width:36px;height:36px;font-size:1rem;">
+      <i class="bi bi-bell-fill"></i>
+    </div>
+    <div class="flex-grow-1">
+      <div style="font-size:0.92rem; font-weight:500;">{{ n.message }}</div>
+      <div style="font-size:0.78rem; color:var(--mt-ink-muted); margin-top:4px;">
+        <i class="bi bi-clock me-1"></i> {{ n.created_at }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="mt-empty" style="padding: 28px;">
+  <i class="bi bi-check2-all" style="font-size: 1.8rem;"></i>
+  <span>You are all caught up! No unread notifications.</span>
+</div>
+{% endif %}
+
+{% endblock %}

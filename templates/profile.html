@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block page_title %}Profile{% endblock %}
+{% block content %}
+
+<div class="mt-card mt-form-card">
+  <div style="display:flex; align-items:center; gap:16px; margin-bottom: 20px;">
+    {% if user.profile_picture %}
+      <img src="{{ user.profile_picture }}" class="mt-avatar" style="width:56px;height:56px;" alt="">
+    {% else %}
+      <span class="mt-avatar mt-avatar-fallback" style="width:56px;height:56px;font-size:1.3rem;">{{ user.name[0] }}</span>
+    {% endif %}
+    <div>
+      <h2 class="mt-display" style="margin:0;">{{ user.name }}</h2>
+      <span class="mt-status mt-status-confirmed">{{ user.role|capitalize }}</span>
+    </div>
+  </div>
+
+  <p><strong>Email:</strong> {{ user.email }}</p>
+  <p><strong>Phone:</strong> {{ user.phone or 'Not provided' }}</p>
+  <p><strong>Member since:</strong> {{ user.created_at }}</p>
+  <p><strong>Last login:</strong> {{ user.last_login or '—' }}</p>
+
+  <p style="font-size:0.82rem; color:var(--mt-ink-soft); margin-top: 18px;">
+    Profile details are managed through your Google account for now.
+  </p>
+</div>
+
+{% endblock %}

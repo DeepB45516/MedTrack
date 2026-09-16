@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block page_title %}Physician Portal{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+  <div>
+    <h2 class="mt-display mb-1">Welcome, Dr. {{ current_user.name.split(' ')[-1] }}</h2>
+    <p style="color:var(--mt-ink-soft); margin:0;">Here is your patient consultation schedule and diagnosis review queue for today.</p>
+  </div>
+  <div class="mt-hero-actions">
+    <a href="{{ url_for('main.appointments') }}" class="mt-btn mt-btn-primary">
+      <i class="bi bi-calendar2-week"></i> View full schedule
+    </a>
+  </div>
+</div>
+
+<div class="mt-stat-grid">
+  <div class="mt-stat">
+    <div class="mt-stat-header">
+      <span class="mt-stat-label">Today's Visits</span>
+      <div class="mt-stat-icon mt-stat-icon-teal"><i class="bi bi-calendar2-day-fill"></i></div>
+    </div>
+    <div class="mt-stat-value">{{ counts.today or 0 }}</div>
+  </div>
+
+  <div class="mt-stat">
+    <div class="mt-stat-header">
+      <span class="mt-stat-label">Pending Requests</span>
+      <div class="mt-stat-icon mt-stat-icon-amber"><i class="bi bi-hourglass-top"></i></div>
+    </div>
+    <div class="mt-stat-value">{{ counts.pending or 0 }}</div>
+  </div>
+
+  <div class="mt-stat">
+    <div class="mt-stat-header">
+      <span class="mt-stat-label">Completed Consults</span>
+      <div class="mt-stat-icon mt-stat-icon-emerald"><i class="bi bi-check2-circle"></i></div>
+    </div>
+    <div class="mt-stat-value">{{ counts.completed or 0 }}</div>
+  </div>
+
+  <div class="mt-stat">
+    <div class="mt-stat-header">
+      <span class="mt-stat-label">Total Treated Patients</span>
+      <div class="mt-stat-icon mt-stat-icon-blue"><i class="bi bi-people-fill"></i></div>
+    </div>
+    <div class="mt-stat-value">{{ counts.total_patients or 0 }}</div>
+  </div>
+</div>
+
+<!-- Upcoming Appointments Queue -->
+<div class="mt-section-heading">
+  <span><i class="bi bi-calendar-event me-2"></i> Upcoming Patient Appointments</span>
+  {% if appointments %}
+    <a href="{{ url_for('main.appointments') }}" class="btn btn-sm btn-link text-decoration-none" style="color:var(--mt-teal-700); font-weight:600;">View all</a>
+  {% endif %}
+</div>
+
+{% if appointments %}
+<div class="mt-table-wrap">
+  <table class="mt-table">
+    <thead>
+      <tr>
+        <th>Patient Name</th>
+        <th>Consultation Date</th>
+        <th>Time Slot</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in appointments %}
+      <tr>
+        <td>
+          <div class="mt-table-user">
+            <div class="mt-table-avatar" style="background:var(--mt-blue-bg); color:var(--mt-blue);">
+              {{ a.patient_name[0] }}
+            </div>
+            <div>
+              <span class="fw-semibold text-dark">{{ a.patient_name }}</span>
+            </div>
+          </div>
+        </td>
+        <td><i class="bi bi-calendar3 me-1 text-muted"></i> {{ a.appointment_date }}</td>
+        <td><i class="bi bi-clock me-1 text-muted"></i> {{ a.appointment_time }}</td>
+        <td>
+          <span class="mt-status mt-status-{{ a.status }}">
+            <span class="mt-status-dot"></span> {{ a.status|capitalize }}
+          </span>
+        </td>
+        <td>
+          <a href="{{ url_for('main.view_appointment', appointment_id=a.id) }}" class="mt-btn mt-btn-outline mt-btn-sm">
+            <i class="bi bi-eye"></i> View Visit
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="mt-empty">
+  <i class="bi bi-calendar2-check"></i>
+  <strong>No upcoming visits in queue.</strong>
+  <p class="mt-1 mb-0 text-muted">Your consultation schedule is currently open.</p>
+</div>
+{% endif %}
+
+<!-- Diagnosis Review Queue -->
+<div class="mt-section-heading">
+  <span><i class="bi bi-clipboard2-pulse me-2"></i> Recent Diagnosis Submissions</span>
+  {% if diagnoses %}
+    <a href="{{ url_for('main.diagnosis_history') }}" class="btn btn-sm btn-link text-decoration-none" style="color:var(--mt-teal-700); font-weight:600;">View all</a>
+  {% endif %}
+</div>
+
+{% if diagnoses %}
+<div class="mt-table-wrap">
+  <table class="mt-table">
+    <thead>
+      <tr>
+        <th>Patient</th>
+        <th>Diagnostic Document</th>
+        <th>Review Status</th>
+        <th>Uploaded</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in diagnoses %}
+      <tr>
+        <td>
+          <span class="fw-semibold">{{ d.patient_name }}</span>
+        </td>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-pdf-fill text-danger fs-5"></i>
+            <span>{{ d.file_name }}</span>
+          </div>
+        </td>
+        <td>
+          <span class="mt-status mt-status-{{ 'confirmed' if d.status == 'reviewed' else 'pending' }}">
+            <span class="mt-status-dot"></span> {{ d.status|capitalize }}
+          </span>
+        </td>
+        <td><i class="bi bi-clock-history me-1 text-muted"></i> {{ d.uploaded_at }}</td>
+        <td>
+          <a href="{{ url_for('main.view_diagnosis', diagnosis_id=d.id) }}" class="mt-btn mt-btn-outline mt-btn-sm">
+            <i class="bi bi-search"></i> Review
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="mt-empty">
+  <i class="bi bi-file-earmark-check"></i>
+  <strong>No diagnosis documents awaiting review.</strong>
+  <p class="mt-1 mb-0 text-muted">Submissions from your patients will appear here.</p>
+</div>
+{% endif %}
+
+<!-- Notifications -->
+<div class="mt-section-heading">
+  <span><i class="bi bi-bell me-2"></i> Clinical Notifications</span>
+</div>
+
+{% if notifications %}
+<div class="mt-card-list">
+  {% for n in notifications %}
+  <div class="mt-card p-3 d-flex align-items-start gap-3">
+    <div class="mt-stat-icon mt-stat-icon-teal flex-shrink-0" style="width:36px;height:36px;font-size:1rem;">
+      <i class="bi bi-bell-fill"></i>
+    </div>
+    <div class="flex-grow-1">
+      <div style="font-size:0.92rem; font-weight:500;">{{ n.message }}</div>
+      <div style="font-size:0.78rem; color:var(--mt-ink-muted); margin-top:4px;">
+        <i class="bi bi-clock me-1"></i> {{ n.created_at }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="mt-empty" style="padding: 28px;">
+  <i class="bi bi-check2-all" style="font-size: 1.8rem;"></i>
+  <span>All caught up! No unread notifications.</span>
+</div>
+{% endif %}
+
+{% endblock %}

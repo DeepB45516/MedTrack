@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block page_title %}Schedule Clinical Appointment{% endblock %}
+{% block content %}
+
+<div class="mt-card mt-form-card" style="max-width: 620px;">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <div class="mt-stat-icon mt-stat-icon-teal" style="width:48px;height:48px;font-size:1.3rem;">
+      <i class="bi bi-calendar-plus-fill"></i>
+    </div>
+    <div>
+      <h2 class="mt-display mb-0" style="font-size:1.5rem;">Schedule a Consultation</h2>
+      <p class="text-muted mb-0" style="font-size:0.9rem;">Choose a board-certified physician, date, and preferred time slot.</p>
+    </div>
+  </div>
+
+  <hr style="border-color:var(--mt-line); margin: 18px 0 22px;">
+
+  <form method="POST" class="mt-auth-form" style="display:flex; flex-direction:column; gap:16px;">
+    <div>
+      <label for="doctor_id" class="form-label fw-semibold" style="font-size:0.88rem;">
+        <i class="bi bi-hospital me-1 text-muted"></i> Select Healthcare Provider
+      </label>
+      <select class="form-select" name="doctor_id" id="doctor_id" required>
+        <option value="" disabled selected>Choose a physician from directory</option>
+        {% for d in doctors %}
+        <option value="{{ d.doctor_id }}">Dr. {{ d.name }} — {{ d.specialization }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label for="appointment_date" class="form-label fw-semibold" style="font-size:0.88rem;">
+          <i class="bi bi-calendar-date me-1 text-muted"></i> Preferred Date
+        </label>
+        <input class="form-control" type="date" name="appointment_date" id="appointment_date" required>
+      </div>
+
+      <div class="col-md-6">
+        <label for="appointment_time" class="form-label fw-semibold" style="font-size:0.88rem;">
+          <i class="bi bi-clock me-1 text-muted"></i> Preferred Time
+        </label>
+        <input class="form-control" type="time" name="appointment_time" id="appointment_time" required>
+      </div>
+    </div>
+
+    <div>
+      <label for="reason" class="form-label fw-semibold" style="font-size:0.88rem;">
+        <i class="bi bi-chat-square-text me-1 text-muted"></i> Chief Complaint / Clinical Reason
+      </label>
+      <textarea class="form-control" name="reason" id="reason" rows="3" placeholder="Briefly describe your symptoms or reason for seeking consultation"></textarea>
+    </div>
+
+    <div class="pt-2">
+      <button type="submit" class="mt-btn mt-btn-primary w-100" style="justify-content: center; padding: 12px;">
+        <i class="bi bi-send-check"></i> Submit Appointment Request
+      </button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

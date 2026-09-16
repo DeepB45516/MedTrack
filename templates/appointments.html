@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block page_title %}Appointments Schedule{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+  <div>
+    <h2 class="mt-display mb-1">Appointments Schedule</h2>
+    <p style="color:var(--mt-ink-soft); margin:0;">Filter and manage clinical consultations across all statuses.</p>
+  </div>
+  {% if current_user.role == 'patient' %}
+  <div>
+    <a href="{{ url_for('main.book_appointment') }}" class="mt-btn mt-btn-primary">
+      <i class="bi bi-calendar-plus"></i> Book new visit
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="mt-hero-actions mb-4">
+  <a href="{{ url_for('main.appointments') }}" class="mt-btn mt-btn-sm {{ 'mt-btn-primary' if not active_status else 'mt-btn-outline' }}">
+    All Visits
+  </a>
+  <a href="{{ url_for('main.appointments', status='pending') }}" class="mt-btn mt-btn-sm {{ 'mt-btn-primary' if active_status == 'pending' else 'mt-btn-outline' }}">
+    <i class="bi bi-hourglass-split"></i> Pending
+  </a>
+  <a href="{{ url_for('main.appointments', status='confirmed') }}" class="mt-btn mt-btn-sm {{ 'mt-btn-primary' if active_status == 'confirmed' else 'mt-btn-outline' }}">
+    <i class="bi bi-check-circle"></i> Confirmed
+  </a>
+  <a href="{{ url_for('main.appointments', status='completed') }}" class="mt-btn mt-btn-sm {{ 'mt-btn-primary' if active_status == 'completed' else 'mt-btn-outline' }}">
+    <i class="bi bi-check2-all"></i> Completed
+  </a>
+  <a href="{{ url_for('main.appointments', status='cancelled') }}" class="mt-btn mt-btn-sm {{ 'mt-btn-primary' if active_status == 'cancelled' else 'mt-btn-outline' }}">
+    <i class="bi bi-x-circle"></i> Cancelled
+  </a>
+</div>
+
+{% if appointments %}
+<div class="mt-table-wrap">
+  <table class="mt-table">
+    <thead>
+      <tr>
+        {% if current_user.role != 'patient' %}<th>Patient</th>{% endif %}
+        {% if current_user.role != 'doctor' %}<th>Healthcare Provider</th>{% endif %}
+        <th>Consultation Date</th>
+        <th>Time</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in appointments %}
+      <tr>
+        {% if current_user.role != 'patient' %}
+        <td>
+          <div class="mt-table-user">
+            <div class="mt-table-avatar" style="background:var(--mt-blue-bg); color:var(--mt-blue);">{{ a.patient_name[0] }}</div>
+            <span class="fw-semibold">{{ a.patient_name }}</span>
+          </div>
+        </td>
+        {% endif %}
+        {% if current_user.role != 'doctor' %}
+        <td>
+          <div class="mt-table-user">
+            <div class="mt-table-avatar">{{ a.doctor_name[0] }}</div>
+            <div>
+              <span class="fw-semibold">Dr. {{ a.doctor_name }}</span>
+            </div>
+          </div>
+        </td>
+        {% endif %}
+        <td><i class="bi bi-calendar3 me-1 text-muted"></i> {{ a.appointment_date }}</td>
+        <td><i class="bi bi-clock me-1 text-muted"></i> {{ a.appointment_time }}</td>
+        <td>
+          <span class="mt-status mt-status-{{ a.status }}">
+            <span class="mt-status-dot"></span> {{ a.status|capitalize }}
+          </span>
+        </td>
+        <td>
+          <a href="{{ url_for('main.view_appointment', appointment_id=a.id) }}" class="mt-btn mt-btn-outline mt-btn-sm">
+            <i class="bi bi-eye"></i> Details
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="mt-empty">
+  <i class="bi bi-calendar-x"></i>
+  <strong>No appointments match this filter.</strong>
+  <p class="mt-1 mb-0 text-muted">Change your filter or schedule a new consultation.</p>
+</div>
+{% endif %}
+
+{% endblock %}

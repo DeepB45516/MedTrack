@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block page_title %}Appointment details{% endblock %}
+{% block content %}
+
+<div class="mt-card mt-form-card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <h2 class="mt-display" style="margin-top:0;">{{ appointment.patient_name }}</h2>
+    <span class="mt-status mt-status-{{ appointment.status }}">{{ appointment.status|capitalize }}</span>
+  </div>
+  <p style="color:var(--mt-ink-soft); margin-top:-8px;">{{ appointment.patient_email }}</p>
+
+  <p><strong>Doctor:</strong> Dr. {{ appointment.doctor_name }} ({{ appointment.specialization }})</p>
+  <p><strong>Date:</strong> {{ appointment.appointment_date }}</p>
+  <p><strong>Time:</strong> {{ appointment.appointment_time }}</p>
+  <p><strong>Reason:</strong> {{ appointment.reason or 'Not specified' }}</p>
+
+  <div style="display:flex; gap:10px; margin-top:18px; flex-wrap:wrap;">
+    {% if appointment.status == 'pending' %}
+    <form method="POST" action="{{ url_for('main.update_appointment_status', appointment_id=appointment.id) }}">
+      <input type="hidden" name="status" value="confirmed">
+      <button type="submit" class="mt-btn mt-btn-primary">Confirm</button>
+    </form>
+    {% endif %}
+    {% if appointment.status == 'confirmed' %}
+    <form method="POST" action="{{ url_for('main.update_appointment_status', appointment_id=appointment.id) }}">
+      <input type="hidden" name="status" value="completed">
+      <button type="submit" class="mt-btn mt-btn-primary">Mark completed</button>
+    </form>
+    {% endif %}
+    {% if appointment.status in ['pending', 'confirmed'] %}
+    <form method="POST" action="{{ url_for('main.update_appointment_status', appointment_id=appointment.id) }}" data-confirm="Cancel this appointment?">
+      <input type="hidden" name="status" value="cancelled">
+      <button type="submit" class="mt-btn mt-btn-danger">Cancel</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <a href="{{ url_for('main.appointments') }}" style="display:block; margin-top:16px; font-size:0.86rem; color:var(--mt-teal-700); font-weight:600;">← Back to appointments</a>
+</div>
+
+{% endblock %}

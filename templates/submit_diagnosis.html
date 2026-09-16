@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block page_title %}Upload Diagnostic Report{% endblock %}
+{% block content %}
+
+<div class="mt-card mt-form-card" style="max-width: 620px;">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <div class="mt-stat-icon mt-stat-icon-teal" style="width:48px;height:48px;font-size:1.3rem;">
+      <i class="bi bi-file-earmark-arrow-up-fill"></i>
+    </div>
+    <div>
+      <h2 class="mt-display mb-0" style="font-size:1.5rem;">Upload Diagnostic Record</h2>
+      <p class="text-muted mb-0" style="font-size:0.9rem;">Share medical documents, scans, or lab panels securely with your care team.</p>
+    </div>
+  </div>
+
+  <hr style="border-color:var(--mt-line); margin: 18px 0 22px;">
+
+  <form method="POST" enctype="multipart/form-data" class="mt-auth-form" style="display:flex; flex-direction:column; gap:16px;">
+    <div>
+      <label for="appointment_id" class="form-label fw-semibold" style="font-size:0.88rem;">
+        <i class="bi bi-calendar2-check me-1 text-muted"></i> Associate with Consultation (Optional)
+      </label>
+      <select class="form-select" name="appointment_id" id="appointment_id">
+        <option value="">General record (Not tied to a specific appointment)</option>
+        {% for a in appointments %}
+        <option value="{{ a.id }}">Dr. {{ a.doctor_name }} — {{ a.appointment_date }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="description" class="form-label fw-semibold" style="font-size:0.88rem;">
+        <i class="bi bi-card-text me-1 text-muted"></i> Document Description & Clinical Notes
+      </label>
+      <textarea class="form-control" name="description" id="description" rows="3" placeholder="e.g. Fasting blood glucose & lipid panel report from Central Labs"></textarea>
+    </div>
+
+    <div>
+      <label for="file" class="form-label fw-semibold" style="font-size:0.88rem;">
+        <i class="bi bi-paperclip me-1 text-muted"></i> Medical File (PDF, JPG, PNG — max 10 MB)
+      </label>
+      <input class="form-control" type="file" name="file" id="file" accept=".pdf,.jpg,.jpeg,.png" required>
+      <div class="form-text text-muted" style="font-size:0.78rem;">
+        <i class="bi bi-lock-fill"></i> Files are stored in encrypted clinical storage with restricted provider access.
+      </div>
+    </div>
+
+    <div class="pt-2">
+      <button type="submit" class="mt-btn mt-btn-primary w-100" style="justify-content: center; padding: 12px;">
+        <i class="bi bi-upload"></i> Upload & Transmit Report
+      </button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

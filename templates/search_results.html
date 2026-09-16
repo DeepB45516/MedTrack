@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block page_title %}Search{% endblock %}
+{% block content %}
+
+<form method="GET" class="mt-card mt-form-card" style="margin-bottom: 22px;">
+  <label for="q">Search appointments</label>
+  <input class="form-control" type="text" name="q" id="q" value="{{ query }}"
+         placeholder="Search by doctor, patient, reason, or status" style="margin-top:6px;">
+  <button type="submit" class="mt-btn mt-btn-primary" style="margin-top:14px;">Search</button>
+</form>
+
+{% if query %}
+  {% if results %}
+  <table class="mt-table">
+    <thead>
+      <tr>
+        {% if current_user.role != 'patient' %}<th>Patient</th>{% endif %}
+        {% if current_user.role != 'doctor' %}<th>Doctor</th>{% endif %}
+        <th>Date</th><th>Status</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in results %}
+      <tr>
+        {% if current_user.role != 'patient' %}<td>{{ a.patient_name }}</td>{% endif %}
+        {% if current_user.role != 'doctor' %}<td>Dr. {{ a.doctor_name }}</td>{% endif %}
+        <td>{{ a.appointment_date }}</td>
+        <td><span class="mt-status mt-status-{{ a.status }}">{{ a.status|capitalize }}</span></td>
+        <td><a href="{{ url_for('main.view_appointment', appointment_id=a.id) }}" class="mt-btn mt-btn-outline mt-btn-sm">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="mt-empty">No results for "{{ query }}".</div>
+  {% endif %}
+{% endif %}
+
+{% endblock %}
