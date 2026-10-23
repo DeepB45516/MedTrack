@@ -7,6 +7,7 @@ current local-development phase. Flip the *_ENABLED flags later
 (Phase 2) to switch services on without touching route code.
 """
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -60,7 +61,11 @@ class Config:
     S3_ENABLED = os.environ.get("S3_ENABLED", "false").lower() == "true"
     SNS_ENABLED = os.environ.get("SNS_ENABLED", "false").lower() == "true"
 
-    # --- Session / security ----------------------------------------------
+    # --- Session / security (long-lived 30-day persistent sessions) ------
+    SESSION_COOKIE_NAME = "medtrack_session"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
-    PERMANENT_SESSION_LIFETIME = 60 * 60 * 8  # 8 hours
+    SESSION_COOKIE_PATH = "/"
+    SESSION_COOKIE_SECURE = False  # Allows both HTTP (localhost) and HTTPS without dropping cookies
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)  # 30-day persistent session
+    SESSION_REFRESH_EACH_REQUEST = True  # Automatically refresh session expiration on activity

@@ -181,3 +181,39 @@ def test_oauth_linking_with_existing_manual_user(app):
         assert linked_user["google_id"] == "g-david-123"
         assert linked_user["profile_picture"] == "https://photo.jpg"
 
+
+
+def test_session_is_permanent_and_persists_across_requests(client, app):
+    make_user(app, email="persistent@example.com", password="password123")
+    resp = client.post("/login", data={"email": "persistent@example.com", "password": "password123"})
+    assert resp.status_code == 302
+
+    cookie = resp.headers.get("Set-Cookie", "")
+    assert "medtrack_session=" in cookie
+    assert "Expires=" in cookie
+
+    # Check dashboard loads and session remains permanent
+    dash_resp = client.get("/patient/dashboard")
+    assert dash_resp.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess.permanent is True
+        assert sess.get("user_email") == "persistent@example.com"
+
+
+def test_session_restores_user_if_user_id_lost(client, app):
+    make_user(app, email="restored@example.com", password="password123")
+    client.post("/login", data={"email": "restored@example.com", "password": "password123"})
+
+    with app.app_context():
+        from database.database import execute_db
+        # Simulate an ephemeral container wipe or deletion of row
+        execute_db("DELETE FROM users WHERE email = 'restored@example.com'")
+
+    # Session cookie still contains signed email and role; should auto-recover user
+    resp = client.get("/patient/dashboard")
+    assert resp.status_code == 200
+    with app.app_context():
+        from database.database import query_db
+        recovered = query_db("SELECT * FROM users WHERE email = 'restored@example.com'", one=True)
+        assert recovered is not None
+        assert recovered["role"] == "patient"

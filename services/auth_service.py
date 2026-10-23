@@ -178,12 +178,42 @@ def find_or_create_user(google_id, name, email, profile_picture):
 
 def get_current_user():
     user_id = session.get("user_id")
-    if not user_id:
+    user_email = session.get("user_email")
+    if not user_id and not user_email:
         return None
+
     if hasattr(g, "_current_user") and g._current_user is not None:
-        if g._current_user["id"] == user_id:
+        if (user_id and g._current_user["id"] == user_id) or (user_email and g._current_user["email"].lower() == user_email.lower()):
             return g._current_user
-    user = query_db("SELECT * FROM users WHERE id = ?", (user_id,), one=True)
+
+    user = None
+    if user_id:
+        user = query_db("SELECT * FROM users WHERE id = ?", (user_id,), one=True)
+
+    # Resilient fallback: lookup by email if user_id was shifted or DB reconnected
+    if user is None and user_email:
+        user = query_db("SELECT * FROM users WHERE lower(email) = ?", (user_email.lower(),), one=True)
+        if user:
+            session["user_id"] = user["id"]
+            session["role"] = user["role"]
+        else:
+            # Ephemeral serverless container recovery: auto-restore verified user
+            role = session.get("role", "patient")
+            name = session.get("user_name", "MedTrack User")
+            cur = execute_db(
+                """INSERT INTO users (name, email, role, created_at, last_login)
+                   VALUES (?, ?, ?, datetime('now'), datetime('now'))""",
+                (name, user_email.lower(), role),
+            )
+            new_id = cur.lastrowid
+            if role == "doctor":
+                execute_db(
+                    "INSERT INTO doctors (user_id, specialization, availability) VALUES (?, ?, ?)",
+                    (new_id, "General Physician", "Mon-Fri 9:00-17:00"),
+                )
+            user = query_db("SELECT * FROM users WHERE id = ?", (new_id,), one=True)
+            session["user_id"] = new_id
+
     g._current_user = user
     return user
 
@@ -193,6 +223,8 @@ def log_in_user(user_row):
     session.permanent = True
     session["user_id"] = user_row["id"]
     session["role"] = user_row["role"]
+    session["user_email"] = user_row["email"]
+    session["user_name"] = user_row["name"] if "name" in user_row.keys() else "User"
     g._current_user = user_row
 
 

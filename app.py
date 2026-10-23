@@ -47,6 +47,11 @@ def create_app(test_config=None):
 
         conn.close()
 
+    @app.before_request
+    def ensure_session_permanent():
+        if "user_id" in session or "user_email" in session:
+            session.permanent = True
+
     register_context_processors(app)
     register_error_handlers(app)
     register_routes(app)
