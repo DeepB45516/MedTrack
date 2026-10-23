@@ -23,7 +23,7 @@
       {% for a in results %}
       <tr>
         {% if current_user.role != 'patient' %}<td>{{ a.patient_name }}</td>{% endif %}
-        {% if current_user.role != 'doctor' %}<td>Dr. {{ a.doctor_name }}</td>{% endif %}
+        {% if current_user.role != 'doctor' %}<td>{{ a.doctor_name|dr }}</td>{% endif %}
         <td>{{ a.appointment_date }}</td>
         <td><span class="mt-status mt-status-{{ a.status }}">{{ a.status|capitalize }}</span></td>
         <td><a href="{{ url_for('main.view_appointment', appointment_id=a.id) }}" class="mt-btn mt-btn-outline mt-btn-sm">View</a></td>

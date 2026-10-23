@@ -4,7 +4,7 @@
 
 <div class="mt-card mt-form-card">
   <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-    <h2 class="mt-display" style="margin-top:0;">Dr. {{ appointment.doctor_name }}</h2>
+    <h2 class="mt-display" style="margin-top:0;">{{ appointment.doctor_name|dr }}</h2>
     <span class="mt-status mt-status-{{ appointment.status }}">{{ appointment.status|capitalize }}</span>
   </div>
   <p style="color:var(--mt-ink-soft); margin-top:-8px;">{{ appointment.specialization }}</p>

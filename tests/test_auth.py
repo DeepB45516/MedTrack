@@ -200,20 +200,19 @@ def test_session_is_permanent_and_persists_across_requests(client, app):
         assert sess.get("user_email") == "persistent@example.com"
 
 
-def test_session_restores_user_if_user_id_lost(client, app):
-    make_user(app, email="restored@example.com", password="password123")
-    client.post("/login", data={"email": "restored@example.com", "password": "password123"})
+def test_deleted_user_session_is_signed_out_not_recreated(client, app):
+    """A cookie for an account that no longer exists must NOT silently create a new
+    account (that produced ghost users with different IDs and broke appointment links)."""
+    make_user(app, email="gone@example.com", password="password123")
+    client.post("/login", data={"email": "gone@example.com", "password": "password123"})
 
     with app.app_context():
         from database.database import execute_db
-        # Simulate an ephemeral container wipe or deletion of row
-        execute_db("DELETE FROM users WHERE email = 'restored@example.com'")
+        execute_db("DELETE FROM users WHERE email = 'gone@example.com'")
 
-    # Session cookie still contains signed email and role; should auto-recover user
     resp = client.get("/patient/dashboard")
-    assert resp.status_code == 200
+    assert resp.status_code == 302
+    assert "/login" in resp.headers["Location"]
     with app.app_context():
         from database.database import query_db
-        recovered = query_db("SELECT * FROM users WHERE email = 'restored@example.com'", one=True)
-        assert recovered is not None
-        assert recovered["role"] == "patient"
+        assert query_db("SELECT * FROM users WHERE email = 'gone@example.com'", one=True) is None

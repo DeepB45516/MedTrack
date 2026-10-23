@@ -37,12 +37,37 @@ _DEFAULT_REDIRECT = (
 )
 
 
+# Shared (Postgres) database. Vercel instances do not share a filesystem, so a
+# hosted database is required for patients/doctors to see the same data.
+# Accepts DATABASE_URL or the variables Vercel's Postgres/Neon/Supabase
+# integrations create. Non-libpq query params those providers add are dropped.
+_PG_DROP_PARAMS = {"supa", "pgbouncer", "schema", "connection_limit", "pool_timeout"}
+
+
+def _find_postgres_url():
+    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+    for key in ("DATABASE_URL", "POSTGRES_URL", "POSTGRES_URL_NON_POOLING"):
+        url = (os.environ.get(key) or "").strip()
+        if url.startswith(("postgres://", "postgresql://")):
+            parts = urlsplit(url.replace("postgres://", "postgresql://", 1))
+            query = [(k, v) for k, v in parse_qsl(parts.query) if k not in _PG_DROP_PARAMS]
+            return urlunsplit(parts._replace(query=urlencode(query)))
+    return ""
+
+
+_POSTGRES_URL = _find_postgres_url()
+
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "medtrack-secure-demo-secret-key-2026"
 
     # --- Database -----------------------------------------------------
-    DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///" + _DB_PATH)
-    DATABASE_PATH = _DB_PATH
+    POSTGRES_URL = _POSTGRES_URL
+    DB_BACKEND = "postgres" if _POSTGRES_URL else "sqlite"
+    DATABASE_PATH = _DB_PATH  # SQLite file (local dev, or /tmp fallback on Vercel)
+
+    # Appointment times are interpreted in this timezone (servers run in UTC).
+    APP_TIMEZONE = os.environ.get("APP_TIMEZONE", "Asia/Kolkata")
 
     # --- Google OAuth ---------------------------------------------------
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
@@ -66,6 +91,6 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_PATH = "/"
-    SESSION_COOKIE_SECURE = False  # Allows both HTTP (localhost) and HTTPS without dropping cookies
+    SESSION_COOKIE_SECURE = IS_VERCEL  # HTTPS on Vercel; plain HTTP still works on localhost
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)  # 30-day persistent session
     SESSION_REFRESH_EACH_REQUEST = True  # Automatically refresh session expiration on activity

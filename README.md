@@ -39,20 +39,27 @@ MedTrack is configured for **[Vercel](https://vercel.com/)** (Flask on the Pytho
 
 1. Push the project to GitHub.
 2. In Vercel, click **Add New → Project** and import the repository. Framework preset: **Other**.
-3. Add Environment Variables (Project → Settings → Environment Variables):
+3. **Create a Postgres database (required).** In the Vercel project open **Storage → Create Database → Neon (Postgres)**
+   and connect it to the project. Vercel adds `DATABASE_URL` / `POSTGRES_URL` automatically. Tables and demo accounts
+   are created on first start.
+4. Add Environment Variables (Project → Settings → Environment Variables):
    - `SECRET_KEY` — any long random string (required for stable sessions)
    - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — only if using Google login
    - `GOOGLE_REDIRECT_URI` — `https://<your-project>.vercel.app/auth/google/callback`
      (also add this URI in Google Cloud Console)
-4. Click **Deploy**. Demo accounts are seeded automatically on first request.
+   - `APP_TIMEZONE` — optional, defaults to `Asia/Kolkata` (appointment times use this timezone)
+5. Click **Deploy** (then redeploy once after adding the database/variables).
 
 Or with the CLI: `npm i -g vercel && vercel --prod`.
 
-> **Serverless storage note:** Vercel's filesystem is read-only except `/tmp`, so SQLite
-> (`/tmp/medtrack.db`) and diagnosis uploads (`/tmp/uploads/diagnosis`) are **temporary**: they
-> reset on cold starts and are not shared between instances. This is fine for demos. For permanent
-> data, move to a hosted database / object storage (e.g. the planned DynamoDB + S3 migration).
-> Vercel also limits request bodies to ~4.5 MB, so large diagnosis uploads will be rejected there.
+> **Why a database is required on Vercel:** every serverless instance has its own temporary disk. Without a shared
+> database a patient and a doctor can be served by different instances and would **not see each other's
+> appointments**. With `DATABASE_URL` set, appointments, accounts, notifications and uploaded reports (stored in
+> the database) are shared by all instances. If it is missing, `/health` returns a warning.
+> Vercel limits request bodies to ~4.5 MB, so larger diagnosis uploads are rejected there.
+>
+> Locally nothing changes: with no `DATABASE_URL` the app uses the SQLite file `database/medtrack.db`.
+> Run the tests against Postgres with `TEST_DATABASE_URL=postgresql://... python -m pytest`.
 
 ### Quick Demo Accounts
 

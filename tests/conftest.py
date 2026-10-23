@@ -11,6 +11,10 @@ from app import create_app
 from database.database import execute_db, query_db
 
 
+# Set TEST_DATABASE_URL=postgresql://... to run the whole suite against Postgres.
+TEST_PG_URL = os.environ.get("TEST_DATABASE_URL", "")
+
+
 @pytest.fixture
 def app():
     db_fd, db_path = tempfile.mkstemp()
@@ -19,12 +23,20 @@ def app():
     Config.DATABASE_PATH = db_path
     Config.UPLOAD_FOLDER = upload_dir
 
-    application = create_app({
+    test_config = {
         "TESTING": True,
         "WTF_CSRF_ENABLED": False,
         "DATABASE_PATH": db_path,
         "UPLOAD_FOLDER": upload_dir,
-    })
+        "DB_BACKEND": "sqlite",
+    }
+    if TEST_PG_URL:
+        import psycopg
+        test_config.update({"DB_BACKEND": "postgres", "POSTGRES_URL": TEST_PG_URL})
+        with psycopg.connect(TEST_PG_URL, autocommit=True) as c:
+            c.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+
+    application = create_app(test_config)
 
     yield application
 

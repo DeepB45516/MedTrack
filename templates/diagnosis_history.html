@@ -45,7 +45,7 @@
         {% if current_user.role != 'doctor' %}
         <td>
           {% if d.doctor_name %}
-            <span class="fw-semibold">Dr. {{ d.doctor_name }}</span>
+            <span class="fw-semibold">{{ d.doctor_name|dr }}</span>
           {% else %}
             <span class="text-muted">Unassigned</span>
           {% endif %}

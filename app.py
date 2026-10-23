@@ -5,18 +5,19 @@ Run with:
     python app.py
 Then visit http://localhost:5000
 """
+import io
+import mimetypes
 import os
-import sqlite3
 from flask import (
     Flask, render_template, redirect, url_for, request, session, flash,
-    send_from_directory, abort, jsonify
+    send_from_directory, send_file, abort, jsonify
 )
 
 from config import Config
 from database import database as db_module
-from database.models import init_db
 
 from services import auth_service, appointment_service, diagnosis_service, notification_service
+from services.formatting import with_dr
 
 
 def create_app(test_config=None):
@@ -26,26 +27,23 @@ def create_app(test_config=None):
         app.config.update(test_config)
 
     db_module.init_app(app)
+    app.jinja_env.filters["dr"] = with_dr
 
-    os.makedirs(os.path.dirname(app.config["DATABASE_PATH"]), exist_ok=True)
-    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    if not db_module.use_postgres(app.config):
+        os.makedirs(os.path.dirname(app.config["DATABASE_PATH"]), exist_ok=True)
+        os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-    with app.app_context():
-        conn = sqlite3.connect(app.config["DATABASE_PATH"])
-        init_db(conn)
+    db_module.init_schema(app.config)
 
-        # For demo deployments (e.g. Vercel), auto-seed demo accounts if empty
-        if not app.config.get("TESTING", False):
+    # For demo deployments (e.g. Vercel), auto-seed demo accounts if the DB is empty
+    if not app.config.get("TESTING", False):
+        with app.app_context():
             try:
-                cur = conn.cursor()
-                user_count = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-                if user_count == 0:
+                if db_module.query_db("SELECT COUNT(*) AS c FROM users", one=True)["c"] == 0:
                     from database.seed import seed
                     seed()
-            except Exception as e:
-                app.logger.warning("Auto-seed error: %s", e)
-
-        conn.close()
+            except Exception as e:  # another instance may be seeding at the same moment
+                app.logger.warning("Auto-seed skipped: %s", e)
 
     @app.before_request
     def ensure_session_permanent():
@@ -91,7 +89,11 @@ def register_routes(app):
 
     @main.route("/health")
     def health():
-        return jsonify({"status": "healthy"})
+        body = {"status": "healthy"}
+        if app.config.get("IS_VERCEL") and not db_module.use_postgres():
+            # SQLite in /tmp is private to each serverless instance: data is NOT shared.
+            body["warning"] = "No DATABASE_URL set: using temporary per-instance storage."
+        return jsonify(body)
 
     @main.route("/login", methods=["GET", "POST"])
     def login():
@@ -110,7 +112,7 @@ def register_routes(app):
 
             auth_service.log_in_user(user)
             flash(f"Welcome back, {user['name']}!", "success")
-            if next_url and next_url.startswith("/"):
+            if next_url and next_url.startswith("/") and not next_url.startswith(("//", "/\\")):
                 return redirect(next_url)
             return redirect(url_for("main.dashboard_redirect"))
 
@@ -227,7 +229,7 @@ def register_routes(app):
     @main.route("/dashboard")
     @auth_service.login_required
     def dashboard_redirect():
-        role = session.get("role")
+        role = auth_service.get_current_user()["role"]
         return redirect(url_for(f"main.{role}_dashboard"))
 
     @main.route("/patient/dashboard")
@@ -235,7 +237,7 @@ def register_routes(app):
     def patient_dashboard():
         user = auth_service.get_current_user()
         counts = appointment_service.dashboard_counts_patient(user["id"])
-        upcoming = appointment_service.list_patient_appointments(user["id"], limit=5)
+        upcoming = appointment_service.list_patient_upcoming(user["id"], limit=5)
         diagnoses = diagnosis_service.list_patient_diagnoses(user["id"], limit=5)
         notifications = notification_service.list_notifications(user["id"], limit=5)
         return render_template("patient_dashboard.html", counts=counts, upcoming=upcoming,
@@ -246,7 +248,7 @@ def register_routes(app):
     def doctor_dashboard():
         user = auth_service.get_current_user()
         counts = appointment_service.dashboard_counts_doctor(user["id"])
-        appointments = appointment_service.list_doctor_appointments(user["id"], limit=5)
+        appointments = appointment_service.list_doctor_upcoming(user["id"], limit=5)
         diagnoses = diagnosis_service.list_doctor_diagnoses(user["id"], limit=5)
         notifications = notification_service.list_notifications(user["id"], limit=5)
         return render_template("doctor_dashboard.html", counts=counts, appointments=appointments,
@@ -293,7 +295,7 @@ def register_routes(app):
             """SELECT a.*, pu.name AS patient_name, du.name AS doctor_name
                FROM appointments a JOIN users pu ON pu.id = a.patient_id
                JOIN doctors d ON d.id = a.doctor_id JOIN users du ON du.id = d.user_id
-               ORDER BY a.appointment_date DESC"""
+               ORDER BY a.appointment_date DESC, a.appointment_time DESC"""
         )
         return render_template("admin_dashboard.html", appts_view=True, appts=appts, stats=None,
                                 recent_appointments=None)
@@ -322,13 +324,18 @@ def register_routes(app):
             appointment_time = request.form.get("appointment_time", "").strip()
             reason = request.form.get("reason", "").strip()
 
-            errors = appointment_service.validate_booking(doctor_id, appointment_date, appointment_time)
+            errors = appointment_service.validate_booking(
+                doctor_id, appointment_date, appointment_time, patient_id=user["id"])
             if errors:
                 for e in errors:
                     flash(e, "danger")
                 return render_template("book_appointment.html", doctors=doctors)
 
-            appointment_service.book_appointment(user["id"], doctor_id, appointment_date, appointment_time, reason)
+            try:
+                appointment_service.book_appointment(user["id"], doctor_id, appointment_date, appointment_time, reason)
+            except ValueError as ex:
+                flash(str(ex), "danger")
+                return render_template("book_appointment.html", doctors=doctors)
             flash("Appointment requested. You'll be notified once the doctor confirms.", "success")
             return redirect(url_for("main.appointments"))
 
@@ -348,7 +355,7 @@ def register_routes(app):
                 """SELECT a.*, pu.name AS patient_name, du.name AS doctor_name
                    FROM appointments a JOIN users pu ON pu.id = a.patient_id
                    JOIN doctors d ON d.id = a.doctor_id JOIN users du ON du.id = d.user_id
-                   ORDER BY a.appointment_date DESC"""
+                   ORDER BY a.appointment_date DESC, a.appointment_time DESC"""
             )
         return render_template("appointments.html", appointments=rows, active_status=status)
 
@@ -454,6 +461,10 @@ def register_routes(app):
         d = diagnosis_service.get_diagnosis(diagnosis_id)
         if not diagnosis_service.user_can_access_diagnosis(user, d):
             abort(404)
+        blob = diagnosis_service.read_stored_file(diagnosis_id)
+        if blob is not None:
+            return send_file(io.BytesIO(blob), as_attachment=True, download_name=d["file_name"],
+                             mimetype=mimetypes.guess_type(d["file_name"])[0] or "application/octet-stream")
         return send_from_directory(app.config["UPLOAD_FOLDER"], d["file_path"],
                                     as_attachment=True, download_name=d["file_name"])
 

@@ -12,7 +12,7 @@ import uuid
 from werkzeug.utils import secure_filename
 from flask import current_app
 
-from database.database import query_db, execute_db
+from database.database import query_db, execute_db, use_postgres
 from services.notification_service import notify
 
 
@@ -60,9 +60,29 @@ def get_file_service():
     return LocalFileService(current_app.config["UPLOAD_FOLDER"])
 
 
+def _prepare_db_upload(file_storage):
+    """Validate an upload and return (original_name, stored_name, bytes) for DB storage."""
+    original_name = secure_filename(file_storage.filename or "")
+    ext = original_name.rsplit(".", 1)[-1].lower() if "." in original_name else ""
+    if not original_name or ext not in current_app.config["ALLOWED_EXTENSIONS"]:
+        raise ValueError("Unsupported file type. Allowed: PDF, JPG, JPEG, PNG.")
+    data = file_storage.read()
+    if len(data) > current_app.config["MAX_CONTENT_LENGTH"]:
+        raise ValueError("File exceeds the maximum allowed size (10 MB).")
+    if not data:
+        raise ValueError("The selected file is empty.")
+    return original_name, f"{uuid.uuid4().hex}.{ext}", data
+
+
 def submit_diagnosis(patient_id, appointment_id, description, file_storage):
-    service = get_file_service()
-    original_name, stored_name = service.save_file(file_storage)
+    file_bytes = None
+    if use_postgres():
+        # Serverless hosts have no shared disk: keep the file in the database so the
+        # doctor can open it from any server instance.
+        original_name, stored_name, file_bytes = _prepare_db_upload(file_storage)
+    else:
+        service = get_file_service()
+        original_name, stored_name = service.save_file(file_storage)
 
     doctor_id = None
     if appointment_id:
@@ -70,12 +90,16 @@ def submit_diagnosis(patient_id, appointment_id, description, file_storage):
                          (appointment_id, patient_id), one=True)
         if appt:
             doctor_id = appt["doctor_id"]
+        else:
+            appointment_id = None  # never link a report to someone else's appointment
 
     cur = execute_db(
         """INSERT INTO diagnoses (patient_id, doctor_id, appointment_id, file_name, file_path, description, status)
            VALUES (?, ?, ?, ?, ?, ?, 'submitted')""",
         (patient_id, doctor_id, appointment_id, original_name, stored_name, description),
     )
+    if file_bytes is not None:
+        execute_db("INSERT INTO diagnosis_files (diagnosis_id, data) VALUES (?, ?)", (cur.lastrowid, file_bytes))
 
     if doctor_id:
         doctor_row = query_db("SELECT user_id FROM doctors WHERE id = ?", (doctor_id,), one=True)
@@ -84,6 +108,14 @@ def submit_diagnosis(patient_id, appointment_id, description, file_storage):
                    f"New diagnosis report submitted: {original_name}")
 
     return cur.lastrowid
+
+
+def read_stored_file(diagnosis_id):
+    """Bytes of a report stored in the database (Postgres), else None (file is on disk)."""
+    if not use_postgres():
+        return None
+    row = query_db("SELECT data FROM diagnosis_files WHERE diagnosis_id = ?", (diagnosis_id,), one=True)
+    return bytes(row["data"]) if row else None
 
 
 def list_patient_diagnoses(patient_id, limit=None):

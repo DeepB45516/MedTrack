@@ -1,26 +1,120 @@
 """
-Thin SQLite access layer.
+Database access layer.
 
-This module is intentionally the *only* place that speaks raw SQL
-against SQLite. In Phase 2, `services/aws/dynamodb_service.py` will
-expose the same function signatures (get_db/query/execute-ish helpers)
-backed by DynamoDB, so route/service code above this layer does not
-need to change — only the import target does.
+This module is the *only* place that speaks to the database driver. Two
+backends are supported behind the same helpers (query_db / execute_db):
+
+* SQLite   - default for local development (single file, zero setup).
+* Postgres - used automatically when DATABASE_URL / POSTGRES_URL is set.
+             REQUIRED on Vercel: serverless instances do not share a
+             filesystem, so a SQLite file would give every instance its own
+             private copy of the data (patients and doctors would not see
+             each other's appointments).
+
+Service code always writes SQL with `?` placeholders; they are translated
+for Postgres here.
 """
 import sqlite3
+from collections import namedtuple
+
 from flask import g, current_app
+
+Result = namedtuple("Result", ["lastrowid", "rowcount"])
+
+try:  # psycopg is only required when a Postgres URL is configured
+    import psycopg
+    from psycopg.rows import dict_row
+    _PG_INTEGRITY = (psycopg.errors.IntegrityError,)
+except Exception:  # pragma: no cover - psycopg not installed locally
+    psycopg = None
+    dict_row = None
+    _PG_INTEGRITY = ()
+
+# Exceptions raised when a UNIQUE / FK constraint is violated (either backend).
+IntegrityErrors = (sqlite3.IntegrityError,) + _PG_INTEGRITY
+
+
+def use_postgres(config=None):
+    cfg = config if config is not None else current_app.config
+    return cfg.get("DB_BACKEND") == "postgres"
+
+
+class Database:
+    """Thin wrapper giving both backends the same tiny API."""
+
+    def __init__(self, config):
+        self.postgres = use_postgres(config)
+        if self.postgres:
+            if psycopg is None:
+                raise RuntimeError("DATABASE_URL points to Postgres but 'psycopg' is not installed.")
+            # autocommit: every statement is its own transaction (no aborted-transaction
+            # state to recover from). prepare_threshold=None keeps PgBouncer-style
+            # poolers (Neon / Supabase / Vercel Postgres) happy.
+            self.raw = psycopg.connect(
+                config["POSTGRES_URL"],
+                row_factory=dict_row,
+                autocommit=True,
+                prepare_threshold=None,
+                connect_timeout=10,
+            )
+        else:
+            self.raw = sqlite3.connect(config["DATABASE_PATH"], timeout=10)
+            self.raw.row_factory = sqlite3.Row
+            self.raw.execute("PRAGMA foreign_keys = ON")
+            self.raw.execute("PRAGMA journal_mode = WAL")
+            self.raw.execute("PRAGMA synchronous = NORMAL")
+            self.raw.execute("PRAGMA temp_store = MEMORY")
+
+    # -- helpers -------------------------------------------------------
+    def _sql(self, sql):
+        # psycopg treats '%' as special: escape literal percent signs, then map ? -> %s
+        return sql.replace("%", "%%").replace("?", "%s") if self.postgres else sql
+
+    def query(self, sql, args=()):
+        if self.postgres:
+            with self.raw.cursor() as cur:
+                cur.execute(self._sql(sql), tuple(args))
+                return cur.fetchall()
+        cur = self.raw.execute(sql, tuple(args))
+        rows = cur.fetchall()
+        cur.close()
+        return rows
+
+    def execute(self, sql, args=()):
+        if self.postgres:
+            stmt = self._sql(sql)
+            is_insert = stmt.lstrip()[:6].upper() == "INSERT"
+            if is_insert and "RETURNING" not in stmt.upper():
+                stmt += " RETURNING id"
+            with self.raw.cursor() as cur:
+                cur.execute(stmt, tuple(args))
+                last_id = None
+                if is_insert:
+                    row = cur.fetchone()
+                    last_id = row["id"] if row else None
+                return Result(last_id, cur.rowcount)
+        cur = self.raw.execute(sql, tuple(args))
+        self.raw.commit()
+        res = Result(cur.lastrowid, cur.rowcount)
+        cur.close()
+        return res
+
+    def close(self):
+        try:
+            self.raw.close()
+        except Exception:
+            pass
+
+
+def connect(config):
+    """Standalone connection (used outside a request, e.g. schema bootstrap)."""
+    return Database(config)
 
 
 def get_db():
-    """Return a request-scoped SQLite connection with row access by name."""
+    """Request-scoped database handle."""
     if "db" not in g:
-        g.db = sqlite3.connect(current_app.config["DATABASE_PATH"], timeout=10)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON")
-        g.db.execute("PRAGMA journal_mode = WAL")
-        g.db.execute("PRAGMA synchronous = NORMAL")
-        g.db.execute("PRAGMA cache_size = -64000")
-        g.db.execute("PRAGMA temp_store = MEMORY")
+        g.db = Database(current_app.config)
     return g.db
 
 
@@ -31,20 +125,35 @@ def close_db(e=None):
 
 
 def query_db(query, args=(), one=False):
-    cur = get_db().execute(query, args)
-    rv = cur.fetchall()
-    cur.close()
-    return (rv[0] if rv else None) if one else rv
+    rows = get_db().query(query, args)
+    return (rows[0] if rows else None) if one else rows
 
 
 def execute_db(query, args=()):
-    """Execute an INSERT/UPDATE/DELETE, commit, and return the cursor
-    (cursor.lastrowid is useful for inserts)."""
-    db = get_db()
-    cur = db.execute(query, args)
-    db.commit()
-    cur.close()
-    return cur
+    """Run INSERT/UPDATE/DELETE. Returns Result(lastrowid, rowcount)."""
+    return get_db().execute(query, args)
+
+
+def init_schema(config):
+    """Create tables/indexes for whichever backend is configured."""
+    from database.models import SCHEMA, PG_SCHEMA, PG_STATEMENTS, migrate_users_table, SLOT_INDEX
+
+    db = connect(config)
+    try:
+        if db.postgres:
+            for stmt in PG_STATEMENTS:
+                db.execute(stmt)
+        else:
+            db.raw.executescript(SCHEMA)
+            migrate_users_table(db.raw)
+            try:  # older local DBs might already contain duplicate slots
+                db.raw.execute(SLOT_INDEX)
+                db.raw.commit()
+            except sqlite3.IntegrityError:
+                pass
+            db.raw.commit()
+    finally:
+        db.close()
 
 
 def init_app(app):

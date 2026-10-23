@@ -13,7 +13,8 @@ import requests
 from flask import session, redirect, url_for, request, flash, current_app, g
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from database.database import query_db, execute_db
+from database.database import query_db, execute_db, IntegrityErrors
+from services.timeutil import now_utc_str
 
 
 # ---------------------------------------------------------------------
@@ -102,11 +103,15 @@ def create_manual_user(name, email, password, role="patient", specialization=Non
         raise ValueError("An account with this email already exists.")
 
     pwd_hash = hash_password(password)
-    cur = execute_db(
-        """INSERT INTO users (google_id, name, email, password_hash, role, phone, created_at, last_login)
-           VALUES (NULL, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))""",
-        (name, email, pwd_hash, role, phone),
-    )
+    now = now_utc_str()
+    try:
+        cur = execute_db(
+            """INSERT INTO users (google_id, name, email, password_hash, role, phone, created_at, last_login)
+               VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, email, pwd_hash, role, phone, now, now),
+        )
+    except IntegrityErrors:
+        raise ValueError("An account with this email already exists.")
     user_id = cur.lastrowid
 
     if role == "doctor":
@@ -136,7 +141,7 @@ def authenticate_manual_user(email, password):
     if not check_password(user["password_hash"], password):
         return None, "Invalid email or password."
 
-    execute_db("UPDATE users SET last_login = datetime('now') WHERE id = ?", (user["id"],))
+    execute_db("UPDATE users SET last_login = ? WHERE id = ?", (now_utc_str(), user["id"]))
     user = query_db("SELECT * FROM users WHERE id = ?", (user["id"],), one=True)
     if hasattr(g, "_current_user"):
         g._current_user = user
@@ -154,21 +159,21 @@ def find_or_create_user(google_id, name, email, profile_picture):
         user = query_db("SELECT * FROM users WHERE lower(email) = ?", (email_clean,), one=True)
         if user is not None:
             execute_db(
-                "UPDATE users SET google_id = ?, profile_picture = COALESCE(profile_picture, ?), last_login = datetime('now') WHERE id = ?",
-                (google_id, profile_picture, user["id"]),
+                "UPDATE users SET google_id = ?, profile_picture = COALESCE(profile_picture, ?), last_login = ? WHERE id = ?",
+                (google_id, profile_picture, now_utc_str(), user["id"]),
             )
             user = query_db("SELECT * FROM users WHERE id = ?", (user["id"],), one=True)
         else:
             cur = execute_db(
                 """INSERT INTO users (google_id, name, email, profile_picture, role, last_login)
-                   VALUES (?, ?, ?, ?, 'patient', datetime('now'))""",
-                (google_id, name, email_clean, profile_picture),
+                   VALUES (?, ?, ?, ?, 'patient', ?)""",
+                (google_id, name, email_clean, profile_picture, now_utc_str()),
             )
             user = query_db("SELECT * FROM users WHERE id = ?", (cur.lastrowid,), one=True)
     else:
         execute_db(
-            "UPDATE users SET last_login = datetime('now'), name = ?, profile_picture = ? WHERE id = ?",
-            (name, profile_picture, user["id"]),
+            "UPDATE users SET last_login = ?, name = ?, profile_picture = ? WHERE id = ?",
+            (now_utc_str(), name, profile_picture, user["id"]),
         )
         user = query_db("SELECT * FROM users WHERE id = ?", (user["id"],), one=True)
     if hasattr(g, "_current_user"):
@@ -190,30 +195,20 @@ def get_current_user():
     if user_id:
         user = query_db("SELECT * FROM users WHERE id = ?", (user_id,), one=True)
 
-    # Resilient fallback: lookup by email if user_id was shifted or DB reconnected
+    # Fallback: look the account up by email (never create accounts from a cookie).
     if user is None and user_email:
         user = query_db("SELECT * FROM users WHERE lower(email) = ?", (user_email.lower(),), one=True)
         if user:
             session["user_id"] = user["id"]
             session["role"] = user["role"]
-        else:
-            # Ephemeral serverless container recovery: auto-restore verified user
-            role = session.get("role", "patient")
-            name = session.get("user_name", "MedTrack User")
-            cur = execute_db(
-                """INSERT INTO users (name, email, role, created_at, last_login)
-                   VALUES (?, ?, ?, datetime('now'), datetime('now'))""",
-                (name, user_email.lower(), role),
-            )
-            new_id = cur.lastrowid
-            if role == "doctor":
-                execute_db(
-                    "INSERT INTO doctors (user_id, specialization, availability) VALUES (?, ?, ?)",
-                    (new_id, "General Physician", "Mon-Fri 9:00-17:00"),
-                )
-            user = query_db("SELECT * FROM users WHERE id = ?", (new_id,), one=True)
-            session["user_id"] = new_id
 
+    if user is None:
+        # The account no longer exists (e.g. data was reset): sign the browser out
+        # instead of silently inventing a new user with different IDs.
+        session.clear()
+        return None
+
+    session["role"] = user["role"]  # keep the cached role in sync with the database
     g._current_user = user
     return user
 
@@ -224,7 +219,7 @@ def log_in_user(user_row):
     session["user_id"] = user_row["id"]
     session["role"] = user_row["role"]
     session["user_email"] = user_row["email"]
-    session["user_name"] = user_row["name"] if "name" in user_row.keys() else "User"
+    session["user_name"] = user_row["name"]
     g._current_user = user_row
 
 

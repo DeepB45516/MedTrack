@@ -23,7 +23,7 @@
       <select class="form-select" name="doctor_id" id="doctor_id" required>
         <option value="" disabled selected>Choose a physician from directory</option>
         {% for d in doctors %}
-        <option value="{{ d.doctor_id }}">Dr. {{ d.name }} — {{ d.specialization }}</option>
+        <option value="{{ d.doctor_id }}">{{ d.name|dr }} — {{ d.specialization }}</option>
         {% endfor %}
       </select>
     </div>

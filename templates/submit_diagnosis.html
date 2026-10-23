@@ -23,7 +23,7 @@
       <select class="form-select" name="appointment_id" id="appointment_id">
         <option value="">General record (Not tied to a specific appointment)</option>
         {% for a in appointments %}
-        <option value="{{ a.id }}">Dr. {{ a.doctor_name }} — {{ a.appointment_date }}</option>
+        <option value="{{ a.id }}">{{ a.doctor_name|dr }} — {{ a.appointment_date }}</option>
         {% endfor %}
       </select>
     </div>
