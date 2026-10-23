@@ -32,7 +32,7 @@
         <label for="email" class="form-label" style="font-size:0.85rem; font-weight:600; color:var(--mt-ink);">
           <i class="bi bi-envelope me-1 text-muted"></i> Email address
         </label>
-        <input type="email" class="form-control" id="email" name="email" value="{{ email or '' }}" required placeholder="name@example.com">
+        <input type="email" class="form-control" id="email" name="email" value="{{ email or '' }}" autocomplete="username" required placeholder="name@example.com">
       </div>
 
       <div class="mb-3">
@@ -63,14 +63,14 @@
         <label for="password" class="form-label" style="font-size:0.85rem; font-weight:600; color:var(--mt-ink);">
           <i class="bi bi-lock me-1 text-muted"></i> Password
         </label>
-        <input type="password" class="form-control" id="password" name="password" required placeholder="At least 6 characters">
+        <input type="password" class="form-control" id="password" name="password" autocomplete="new-password" required placeholder="At least 6 characters">
       </div>
 
       <div class="mb-3">
         <label for="confirm_password" class="form-label" style="font-size:0.85rem; font-weight:600; color:var(--mt-ink);">
           <i class="bi bi-check2-circle me-1 text-muted"></i> Confirm Password
         </label>
-        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required placeholder="Repeat your password">
+        <input type="password" class="form-control" id="confirm_password" name="confirm_password" autocomplete="new-password" required placeholder="Repeat your password">
       </div>
 
       <button type="submit" class="mt-btn mt-btn-primary w-100" style="justify-content: center; padding: 12px;">

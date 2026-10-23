@@ -29,14 +29,20 @@
         <label for="email" class="form-label" style="font-size:0.85rem; font-weight:600; color:var(--mt-ink);">
           <i class="bi bi-envelope me-1 text-muted"></i> Email address
         </label>
-        <input type="email" class="form-control" id="email" name="email" value="{{ email or '' }}" required autofocus placeholder="name@example.com">
+        <input type="email" class="form-control" id="email" name="email" value="{{ email or '' }}" autocomplete="username" required autofocus placeholder="name@example.com">
       </div>
 
       <div class="mb-3">
         <label for="password" class="form-label" style="font-size:0.85rem; font-weight:600; color:var(--mt-ink);">
           <i class="bi bi-lock me-1 text-muted"></i> Password
         </label>
-        <input type="password" class="form-control" id="password" name="password" required placeholder="Enter your password">
+        <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required placeholder="Enter your password">
+      </div>
+
+      <div class="mb-3 form-check">
+        <input type="hidden" name="remember_me" value="0">
+        <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me" value="1" checked>
+        <label class="form-check-label" for="remember_me" style="font-size:0.85rem;">Keep me signed in on this device</label>
       </div>
 
       <button type="submit" class="mt-btn mt-btn-primary w-100" style="justify-content: center; padding: 12px;">

@@ -216,3 +216,33 @@ def test_deleted_user_session_is_signed_out_not_recreated(client, app):
     with app.app_context():
         from database.database import query_db
         assert query_db("SELECT * FROM users WHERE email = 'gone@example.com'", one=True) is None
+
+
+def test_credentials_are_stored_hashed_in_database_and_survive_new_instance(app, client):
+    """Signup writes the account to the DB (password hashed, never plain text); the same
+    login works from a brand-new app instance on the same database."""
+    client.post("/signup", data={"name": "Sam", "email": "Sam@Example.com", "password": "secret123",
+                                 "confirm_password": "secret123", "role": "patient"})
+    with app.app_context():
+        from database.database import query_db
+        row = query_db("SELECT email, password_hash FROM users WHERE email = 'sam@example.com'", one=True)
+        assert row is not None
+        assert row["password_hash"] and "secret123" not in row["password_hash"]
+
+    from app import create_app
+    keys = ("DATABASE_PATH", "UPLOAD_FOLDER", "DB_BACKEND", "POSTGRES_URL")
+    other = create_app({**{k: app.config[k] for k in keys if k in app.config}, "TESTING": True})
+    resp = other.test_client().post("/login", data={"email": "sam@example.com", "password": "secret123"})
+    assert resp.status_code == 302 and "/dashboard" in resp.headers["Location"]
+
+
+def test_keep_me_signed_in_controls_cookie_lifetime(app):
+    make_user(app, email="k@example.com", password="password123")
+    remembered = app.test_client()
+    r1 = remembered.post("/login", data={"email": "k@example.com", "password": "password123",
+                                         "remember_me": ["0", "1"]})
+    assert "Expires=" in r1.headers.get("Set-Cookie", "")
+    temporary = app.test_client()
+    r2 = temporary.post("/login", data={"email": "k@example.com", "password": "password123",
+                                        "remember_me": "0"})
+    assert "Expires=" not in r2.headers.get("Set-Cookie", "")

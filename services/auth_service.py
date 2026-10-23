@@ -213,9 +213,11 @@ def get_current_user():
     return user
 
 
-def log_in_user(user_row):
+def log_in_user(user_row, remember=True):
+    """Start a session. remember=True keeps the user signed in for 30 days."""
     session.clear()
-    session.permanent = True
+    session.permanent = bool(remember)
+    session["remember"] = bool(remember)
     session["user_id"] = user_row["id"]
     session["role"] = user_row["role"]
     session["user_email"] = user_row["email"]

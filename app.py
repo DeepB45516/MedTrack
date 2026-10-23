@@ -48,7 +48,7 @@ def create_app(test_config=None):
     @app.before_request
     def ensure_session_permanent():
         if "user_id" in session or "user_email" in session:
-            session.permanent = True
+            session.permanent = session.get("remember", True)
 
     register_context_processors(app)
     register_error_handlers(app)
@@ -110,7 +110,9 @@ def register_routes(app):
                 flash(err, "danger")
                 return render_template("login.html", email=email, next=next_url)
 
-            auth_service.log_in_user(user)
+            remember_vals = request.form.getlist("remember_me")
+            remember = not (remember_vals and remember_vals[-1] == "0")
+            auth_service.log_in_user(user, remember=remember)
             flash(f"Welcome back, {user['name']}!", "success")
             if next_url and next_url.startswith("/") and not next_url.startswith(("//", "/\\")):
                 return redirect(next_url)
