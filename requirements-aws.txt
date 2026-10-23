@@ -1,0 +1,3 @@
+-r requirements.txt
+# Reserved for Phase 2 AWS integration — not needed locally or on Vercel.
+boto3==1.35.24

@@ -8,7 +8,7 @@ are required to run this app.
 ```bash
 cd medtrack
 python -m venv venv && source venv/bin/activate   # optional but recommended
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # includes pytest
 
 cp .env.example .env
 # then fill in GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (see below)
@@ -32,23 +32,27 @@ Run tests:
 python -m pytest -v
 ```
 
-## Deploy to Render (Demo Use)
+## Deploy to Vercel (Demo Use)
 
-MedTrack includes native support for **[Render](https://render.com/)** free tier web service deployments:
+MedTrack is configured for **[Vercel](https://vercel.com/)** (Flask on the Python runtime):
+`api/index.py` is the serverless entry point and `vercel.json` routes every request to it.
 
-1. **Push to your GitHub repository** (already done).
-2. Go to [Render Dashboard](https://dashboard.render.com/) and click **New +** → **Web Service**.
-3. Connect your repository: `https://github.com/DeepB45516/MedTrack.git`.
-4. Configure settings:
-   - **Name**: `medtrack` (or your choice)
-   - **Language**: `Python 3`
-   - **Branch**: `main`
-   - **Build Command**: `pip install -r requirements.txt && python -m database.seed`
-   - **Start Command**: `gunicorn "app:app"`
-   - **Instance Type**: `Free`
-5. Click **Create Web Service**.
+1. Push the project to GitHub.
+2. In Vercel, click **Add New → Project** and import the repository. Framework preset: **Other**.
+3. Add Environment Variables (Project → Settings → Environment Variables):
+   - `SECRET_KEY` — any long random string (required for stable sessions)
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — only if using Google login
+   - `GOOGLE_REDIRECT_URI` — `https://<your-project>.vercel.app/auth/google/callback`
+     (also add this URI in Google Cloud Console)
+4. Click **Deploy**. Demo accounts are seeded automatically on first request.
 
-> Render will automatically detect the provided `render.yaml` Blueprint or `Procfile`. The database and demo accounts are seeded automatically on first boot!
+Or with the CLI: `npm i -g vercel && vercel --prod`.
+
+> **Serverless storage note:** Vercel's filesystem is read-only except `/tmp`, so SQLite
+> (`/tmp/medtrack.db`) and diagnosis uploads (`/tmp/uploads/diagnosis`) are **temporary**: they
+> reset on cold starts and are not shared between instances. This is fine for demos. For permanent
+> data, move to a hosted database / object storage (e.g. the planned DynamoDB + S3 migration).
+> Vercel also limits request bodies to ~4.5 MB, so large diagnosis uploads will be rejected there.
 
 ### Quick Demo Accounts
 
@@ -60,21 +64,12 @@ MedTrack includes native support for **[Render](https://render.com/)** free tier
 
 *(You can also use the 1-click autofill buttons on the `/login` page or create a new account via `/signup`)*
 
-### Keeping the Free Tier Render Web Service Awake
-
-Render's free tier automatically suspends web services after 15 minutes of inactivity. MedTrack includes built-in support to keep the service running continuously:
-
-1. **Automatic Built-in Keep-Alive**:
-   When deployed on Render, MedTrack's background service (`services/keep_alive.py`) automatically detects `RENDER_EXTERNAL_URL` and sends an HTTP ping to `/health` every 8 minutes (configurable via `KEEP_ALIVE_INTERVAL_MINUTES=8`), preventing Render from idling down.
-2. **External Monitor (Optional 100% Uptime Fallback)**:
-   You can also paste `https://<your-service>.onrender.com/health` into a free monitor like **[UptimeRobot](https://uptimerobot.com/)** or **[cron-job.org](https://cron-job.org/)** with a 5-minute interval.
-
 ## Google OAuth setup
 
 1. In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
    create an OAuth 2.0 Client ID (type: Web application).
 2. Add `http://localhost:5000/auth/google/callback` as an authorized redirect URI.
-3. Copy the Client ID and Client Secret into `.env`.
+3. Copy the Client ID and Client Secret into `.env` (locally) or Vercel Environment Variables (deployed).
 
 Until this is configured, `/auth/google` will show a friendly warning
 instead of crashing — everything else in the app still works.
@@ -124,6 +119,8 @@ only imported lazily inside methods that currently all raise
 
 ```
 app.py                 Flask app factory + all routes
+api/index.py           Vercel serverless entry point
+vercel.json            Vercel routing/config
 config.py               Environment-driven configuration
 database/                database.py (connection), models.py (schema), seed.py
 services/                auth, appointment, diagnosis, notification logic

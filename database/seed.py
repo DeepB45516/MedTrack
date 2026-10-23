@@ -1,5 +1,5 @@
 """
-Demo-data seeder for MedTrack (local development & Render demo deployment).
+Demo-data seeder for MedTrack (local development & Vercel demo deployment).
 
 Run with:  python -m database.seed
 

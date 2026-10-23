@@ -1,0 +1,12 @@
+.env
+*.pem
+.git
+.pytest_cache
+__pycache__
+*.pyc
+tests
+run_app.bat
+database/medtrack.db
+uploads/diagnosis/*
+venv
+.venv

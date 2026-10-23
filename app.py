@@ -1,5 +1,5 @@
 """
-MedTrack — local-phase entry point.
+MedTrack — entry point (local + Vercel).
 
 Run with:
     python app.py
@@ -33,7 +33,7 @@ def create_app():
         init_db(conn)
         conn.close()
 
-        # For demo deployments (e.g. Render), auto-seed demo accounts if empty
+        # For demo deployments (e.g. Vercel), auto-seed demo accounts if empty
         if not app.config.get("TESTING", False):
             try:
                 conn = sqlite3.connect(app.config["DATABASE_PATH"])
@@ -49,10 +49,6 @@ def create_app():
     register_context_processors(app)
     register_error_handlers(app)
     register_routes(app)
-
-    if not app.config.get("TESTING", False):
-        from services.keep_alive import start_keep_alive
-        start_keep_alive(app)
 
     return app
 
