@@ -134,15 +134,44 @@ def execute_db(query, args=()):
     return get_db().execute(query, args)
 
 
+_SCHEMA_LOCK_ID = 7240017
+
+
+def _init_postgres_schema(db):
+    """Create tables once, safely, even if many serverless instances start at the same time."""
+    from database.models import PG_STATEMENTS, PG_TABLES
+
+    raw = db.raw
+    # One transaction + transaction-level advisory lock: concurrent cold starts queue up
+    # instead of colliding (also works behind transaction-mode poolers such as Supabase's).
+    with raw.transaction():
+        raw.execute("SELECT pg_advisory_xact_lock(%s)", (_SCHEMA_LOCK_ID,))
+        missing = raw.execute(
+            "SELECT t AS name FROM unnest(%s::text[]) AS t WHERE to_regclass('public.' || t) IS NULL",
+            (list(PG_TABLES),),
+        ).fetchall()
+        if missing:
+            for stmt in PG_STATEMENTS:
+                raw.execute(stmt)
+        no_rls = raw.execute(
+            """SELECT c.relname AS name FROM pg_class c
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+               WHERE n.nspname = 'public' AND c.relkind = 'r'
+                 AND NOT c.relrowsecurity AND c.relname = ANY(%s)""",
+            (list(PG_TABLES),),
+        ).fetchall()
+        for row in no_rls:
+            raw.execute(f'ALTER TABLE "{row["name"]}" ENABLE ROW LEVEL SECURITY')
+
+
 def init_schema(config):
     """Create tables/indexes for whichever backend is configured."""
-    from database.models import SCHEMA, PG_SCHEMA, PG_STATEMENTS, migrate_users_table, SLOT_INDEX
+    from database.models import SCHEMA, migrate_users_table, SLOT_INDEX
 
     db = connect(config)
     try:
         if db.postgres:
-            for stmt in PG_STATEMENTS:
-                db.execute(stmt)
+            _init_postgres_schema(db)
         else:
             db.raw.executescript(SCHEMA)
             migrate_users_table(db.raw)
