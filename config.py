@@ -6,7 +6,9 @@ disabled/off so the app runs with zero AWS dependencies in the
 current local-development phase. Flip the *_ENABLED flags later
 (Phase 2) to switch services on without touching route code.
 """
+import hashlib
 import os
+import secrets
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -58,8 +60,27 @@ def _find_postgres_url():
 _POSTGRES_URL = _find_postgres_url()
 
 
+def _secret_key():
+    """Session-signing key.
+
+    Uses SECRET_KEY when set. Otherwise (so sessions still survive across serverless
+    instances) it is derived from the private database URL; on Vercel without any
+    shared database a random per-instance key is used. The public development default
+    is only ever used locally, never on Vercel, so cookies cannot be forged.
+    """
+    key = os.environ.get("SECRET_KEY")
+    if key:
+        return key
+    if _POSTGRES_URL:
+        return hashlib.sha256(("medtrack-session:" + _POSTGRES_URL).encode()).hexdigest()
+    if IS_VERCEL:
+        return secrets.token_hex(32)
+    return "medtrack-secure-demo-secret-key-2026"
+
+
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY") or "medtrack-secure-demo-secret-key-2026"
+    IS_VERCEL = IS_VERCEL
+    SECRET_KEY = _secret_key()
 
     # --- Database -----------------------------------------------------
     POSTGRES_URL = _POSTGRES_URL

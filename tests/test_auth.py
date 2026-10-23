@@ -183,12 +183,20 @@ def test_oauth_linking_with_existing_manual_user(app):
 
 
 
+def _session_cookie_header(resp):
+    """The Set-Cookie header for the session cookie (login also sets a remembered-email cookie)."""
+    for h in resp.headers.getlist("Set-Cookie"):
+        if h.startswith("medtrack_session="):
+            return h
+    return ""
+
+
 def test_session_is_permanent_and_persists_across_requests(client, app):
     make_user(app, email="persistent@example.com", password="password123")
     resp = client.post("/login", data={"email": "persistent@example.com", "password": "password123"})
     assert resp.status_code == 302
 
-    cookie = resp.headers.get("Set-Cookie", "")
+    cookie = _session_cookie_header(resp)
     assert "medtrack_session=" in cookie
     assert "Expires=" in cookie
 
@@ -241,8 +249,67 @@ def test_keep_me_signed_in_controls_cookie_lifetime(app):
     remembered = app.test_client()
     r1 = remembered.post("/login", data={"email": "k@example.com", "password": "password123",
                                          "remember_me": ["0", "1"]})
-    assert "Expires=" in r1.headers.get("Set-Cookie", "")
+    assert "Expires=" in _session_cookie_header(r1)
     temporary = app.test_client()
     r2 = temporary.post("/login", data={"email": "k@example.com", "password": "password123",
                                         "remember_me": "0"})
-    assert "Expires=" not in r2.headers.get("Set-Cookie", "")
+    assert "Expires=" not in _session_cookie_header(r2)
+
+
+def _other_instance(app):
+    from app import create_app
+    keys = ("DATABASE_PATH", "UPLOAD_FOLDER", "DB_BACKEND", "POSTGRES_URL", "SECRET_KEY")
+    return create_app({**{k: app.config[k] for k in keys if k in app.config}, "TESTING": True})
+
+
+def test_every_tab_stays_signed_in_when_requests_hit_different_instances(app, client):
+    """Regression: users were sent back to the sign-in page on every tab click."""
+    from tests.conftest import make_doctor
+    make_user(app, email="pat@example.com", password="password123")
+    doc_user, _ = make_doctor(app, email="doc@example.com", google_id="gdoc")
+    with app.app_context():
+        from database.database import execute_db
+        from services.auth_service import hash_password
+        execute_db("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password("password123"), doc_user["id"]))
+
+    tabs = {
+        "pat@example.com": ["/patient/dashboard", "/appointments", "/book-appointment", "/diagnosis",
+                            "/submit-diagnosis", "/search?q=a", "/notifications", "/profile"],
+        "doc@example.com": ["/doctor/dashboard", "/appointments", "/diagnosis", "/search?q=a",
+                            "/notifications", "/profile"],
+    }
+    for email, urls in tabs.items():
+        c = app.test_client()
+        assert c.post("/login", data={"email": email, "password": "password123"}).status_code == 302
+        cookie = c.get_cookie("medtrack_session").value
+        for url in urls:
+            inst = _other_instance(app)           # every click lands on a "fresh" server
+            c2 = inst.test_client()
+            c2.set_cookie("medtrack_session", cookie)
+            resp = c2.get(url)
+            assert resp.status_code == 200, (email, url, resp.status_code, resp.headers.get("Location"))
+
+
+def test_login_id_is_remembered_and_prefilled(app, client):
+    make_user(app, email="me@example.com", password="password123")
+    client.post("/login", data={"email": "me@example.com", "password": "password123"})
+    client.get("/logout")
+    page = client.get("/login")
+    assert b'value="me@example.com"' in page.data
+    assert b'autocomplete="current-password"' in page.data
+
+    # "Keep me signed in" unticked => ID is not stored on the device
+    client.post("/login", data={"email": "me@example.com", "password": "password123", "remember_me": "0"})
+    client.get("/logout")
+    assert b'value="me@example.com"' not in client.get("/login").data
+
+
+def test_session_key_is_never_the_public_default_on_vercel(monkeypatch):
+    import config
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setattr(config, "IS_VERCEL", True)
+    monkeypatch.setattr(config, "_POSTGRES_URL", "")
+    k1, k2 = config._secret_key(), config._secret_key()
+    assert k1 != "medtrack-secure-demo-secret-key-2026" and k1 != k2      # random, unforgeable
+    monkeypatch.setattr(config, "_POSTGRES_URL", "postgresql://u:p@h/db")
+    assert config._secret_key() == config._secret_key()                   # stable across instances

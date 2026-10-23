@@ -62,7 +62,8 @@ def register_context_processors(app):
     def inject_globals():
         user = auth_service.get_current_user()
         unread = notification_service.unread_count(user["id"]) if user else 0
-        return {"current_user": user, "unread_notifications": unread}
+        no_shared_db = bool(app.config.get("IS_VERCEL")) and not db_module.use_postgres()
+        return {"current_user": user, "unread_notifications": unread, "storage_warning": no_shared_db}
 
 
 def register_error_handlers(app):
@@ -73,6 +74,15 @@ def register_error_handlers(app):
     @app.errorhandler(500)
     def server_error(e):
         return render_template("500.html"), 500
+
+
+def _remember_email(resp, email, remember):
+    """Remember the login ID (email only, never the password) so the login form is pre-filled."""
+    if remember:
+        resp.set_cookie("mt_last_email", email, max_age=365 * 24 * 3600, httponly=True,
+                        samesite="Lax", secure=bool(Config.SESSION_COOKIE_SECURE))
+    else:
+        resp.delete_cookie("mt_last_email")
 
 
 def register_routes(app):
@@ -115,10 +125,14 @@ def register_routes(app):
             auth_service.log_in_user(user, remember=remember)
             flash(f"Welcome back, {user['name']}!", "success")
             if next_url and next_url.startswith("/") and not next_url.startswith(("//", "/\\")):
-                return redirect(next_url)
-            return redirect(url_for("main.dashboard_redirect"))
+                resp = redirect(next_url)
+            else:
+                resp = redirect(url_for("main.dashboard_redirect"))
+            _remember_email(resp, user["email"], remember)
+            return resp
 
-        return render_template("login.html", next=request.args.get("next"))
+        return render_template("login.html", next=request.args.get("next"),
+                               email=request.cookies.get("mt_last_email", ""))
 
     @main.route("/signup", methods=["GET", "POST"])
     def signup():
@@ -155,7 +169,9 @@ def register_routes(app):
 
             auth_service.log_in_user(user)
             flash(f"Welcome to MedTrack, {user['name']}! Your account has been created.", "success")
-            return redirect(url_for("main.dashboard_redirect"))
+            resp = redirect(url_for("main.dashboard_redirect"))
+            _remember_email(resp, user["email"], True)
+            return resp
 
         return render_template("signup.html")
 

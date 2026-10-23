@@ -146,6 +146,13 @@
     </header>
 
     <main class="mt-content">
+      {% if storage_warning %}
+      <div class="alert alert-warning mt-alert" role="alert">
+        <strong>Database not connected.</strong> This deployment has no shared database, so accounts and appointments
+        are lost between server instances (you will be signed out repeatedly). In Vercel open
+        <em>Storage &rarr; Create Database &rarr; Neon</em>, connect it to this project and redeploy.
+      </div>
+      {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, message in messages %}
