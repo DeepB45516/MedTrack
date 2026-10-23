@@ -158,6 +158,13 @@ PG_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_users_role ON users (role)",
     SLOT_INDEX,
 ]
+# Supabase exposes every public table through its REST API. Enabling Row Level Security
+# (with no policies) blocks that public path; the app itself connects as the table owner,
+# which is not affected. Harmless on any other Postgres.
+PG_STATEMENTS += [
+    f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY"
+    for t in ("users", "doctors", "appointments", "diagnoses", "diagnosis_files", "notifications")
+]
 PG_SCHEMA = ";\n".join(PG_STATEMENTS)
 
 

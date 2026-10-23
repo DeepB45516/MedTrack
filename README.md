@@ -52,6 +52,10 @@ MedTrack is configured for **[Vercel](https://vercel.com/)** (Flask on the Pytho
 
 Or with the CLI: `npm i -g vercel && vercel --prod`.
 
+> **Using Supabase instead of Neon:** create a project, click **Connect** and copy the **Transaction pooler**
+> string (port 6543), then set it as `DATABASE_URL` in Vercel (URL-encode special characters in the password).
+> The Supabase direct connection is IPv6-only and fails on Vercel, so use the pooler.
+>
 > **Why a database is required on Vercel:** every serverless instance has its own temporary disk. Without a shared
 > database a patient and a doctor can be served by different instances and would **not see each other's
 > appointments**. With `DATABASE_URL` set, appointments, accounts, notifications and uploaded reports (stored in
