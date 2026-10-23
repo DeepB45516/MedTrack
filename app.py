@@ -19,9 +19,11 @@ from database.models import init_db
 from services import auth_service, appointment_service, diagnosis_service, notification_service
 
 
-def create_app():
+def create_app(test_config=None):
     app = Flask(__name__)
     app.config.from_object(Config)
+    if test_config:
+        app.config.update(test_config)
 
     db_module.init_app(app)
 
@@ -31,20 +33,19 @@ def create_app():
     with app.app_context():
         conn = sqlite3.connect(app.config["DATABASE_PATH"])
         init_db(conn)
-        conn.close()
 
         # For demo deployments (e.g. Vercel), auto-seed demo accounts if empty
         if not app.config.get("TESTING", False):
             try:
-                conn = sqlite3.connect(app.config["DATABASE_PATH"])
                 cur = conn.cursor()
                 user_count = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-                conn.close()
                 if user_count == 0:
                     from database.seed import seed
                     seed()
             except Exception as e:
                 app.logger.warning("Auto-seed error: %s", e)
+
+        conn.close()
 
     register_context_processors(app)
     register_error_handlers(app)
@@ -229,9 +230,9 @@ def register_routes(app):
     def patient_dashboard():
         user = auth_service.get_current_user()
         counts = appointment_service.dashboard_counts_patient(user["id"])
-        upcoming = appointment_service.list_patient_appointments(user["id"])[:5]
-        diagnoses = diagnosis_service.list_patient_diagnoses(user["id"])[:5]
-        notifications = notification_service.list_notifications(user["id"])[:5]
+        upcoming = appointment_service.list_patient_appointments(user["id"], limit=5)
+        diagnoses = diagnosis_service.list_patient_diagnoses(user["id"], limit=5)
+        notifications = notification_service.list_notifications(user["id"], limit=5)
         return render_template("patient_dashboard.html", counts=counts, upcoming=upcoming,
                                 diagnoses=diagnoses, notifications=notifications)
 
@@ -240,9 +241,9 @@ def register_routes(app):
     def doctor_dashboard():
         user = auth_service.get_current_user()
         counts = appointment_service.dashboard_counts_doctor(user["id"])
-        appointments = appointment_service.list_doctor_appointments(user["id"])[:5]
-        diagnoses = diagnosis_service.list_doctor_diagnoses(user["id"])[:5]
-        notifications = notification_service.list_notifications(user["id"])[:5]
+        appointments = appointment_service.list_doctor_appointments(user["id"], limit=5)
+        diagnoses = diagnosis_service.list_doctor_diagnoses(user["id"], limit=5)
+        notifications = notification_service.list_notifications(user["id"], limit=5)
         return render_template("doctor_dashboard.html", counts=counts, appointments=appointments,
                                 diagnoses=diagnoses, notifications=notifications)
 
@@ -251,10 +252,11 @@ def register_routes(app):
     def admin_dashboard():
         stats = db_module.query_db(
             """SELECT
-                 (SELECT COUNT(*) FROM users) AS total_users,
-                 (SELECT COUNT(*) FROM users WHERE role='doctor') AS total_doctors,
-                 (SELECT COUNT(*) FROM users WHERE role='patient') AS total_patients,
-                 (SELECT COUNT(*) FROM appointments) AS total_appointments""",
+                 COUNT(*) AS total_users,
+                 COUNT(CASE WHEN role='doctor' THEN 1 END) AS total_doctors,
+                 COUNT(CASE WHEN role='patient' THEN 1 END) AS total_patients,
+                 (SELECT COUNT(*) FROM appointments) AS total_appointments
+               FROM users""",
             one=True,
         )
         recent_appointments = db_module.query_db(

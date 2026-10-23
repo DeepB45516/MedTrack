@@ -19,13 +19,20 @@ def app():
     Config.DATABASE_PATH = db_path
     Config.UPLOAD_FOLDER = upload_dir
 
-    application = create_app()
-    application.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
+    application = create_app({
+        "TESTING": True,
+        "WTF_CSRF_ENABLED": False,
+        "DATABASE_PATH": db_path,
+        "UPLOAD_FOLDER": upload_dir,
+    })
 
     yield application
 
     os.close(db_fd)
-    os.unlink(db_path)
+    try:
+        os.unlink(db_path)
+    except OSError:
+        pass
 
 
 @pytest.fixture

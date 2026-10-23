@@ -86,26 +86,27 @@ def submit_diagnosis(patient_id, appointment_id, description, file_storage):
     return cur.lastrowid
 
 
-def list_patient_diagnoses(patient_id):
-    return query_db(
-        """SELECT d.*, du.name AS doctor_name
+def list_patient_diagnoses(patient_id, limit=None):
+    sql = """SELECT d.*, du.name AS doctor_name
            FROM diagnoses d LEFT JOIN doctors doc ON doc.id = d.doctor_id
            LEFT JOIN users du ON du.id = doc.user_id
-           WHERE d.patient_id = ? ORDER BY d.uploaded_at DESC""",
-        (patient_id,),
-    )
+           WHERE d.patient_id = ? ORDER BY d.uploaded_at DESC"""
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+    return query_db(sql, (patient_id,))
 
 
-def list_doctor_diagnoses(doctor_user_id):
-    doctor = query_db("SELECT id FROM doctors WHERE user_id = ?", (doctor_user_id,), one=True)
+def list_doctor_diagnoses(doctor_user_id, limit=None):
+    from services.appointment_service import get_doctor_by_user_id
+    doctor = get_doctor_by_user_id(doctor_user_id)
     if doctor is None:
         return []
-    return query_db(
-        """SELECT d.*, pu.name AS patient_name
+    sql = """SELECT d.*, pu.name AS patient_name
            FROM diagnoses d JOIN users pu ON pu.id = d.patient_id
-           WHERE d.doctor_id = ? ORDER BY d.uploaded_at DESC""",
-        (doctor["id"],),
-    )
+           WHERE d.doctor_id = ? ORDER BY d.uploaded_at DESC"""
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+    return query_db(sql, (doctor["id"],))
 
 
 def get_diagnosis(diagnosis_id):
@@ -128,6 +129,7 @@ def user_can_access_diagnosis(user, diagnosis):
     if user["role"] == "patient":
         return diagnosis["patient_id"] == user["id"]
     if user["role"] == "doctor":
-        doctor = query_db("SELECT id FROM doctors WHERE user_id = ?", (user["id"],), one=True)
+        from services.appointment_service import get_doctor_by_user_id
+        doctor = get_doctor_by_user_id(user["id"])
         return doctor is not None and diagnosis["doctor_id"] == doctor["id"]
     return False

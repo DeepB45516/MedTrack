@@ -1,8 +1,7 @@
-// MedTrack — small progressive-enhancement helpers (no framework needed
-// for the current local phase).
+// MedTrack — Performance-optimized progressive-enhancement helpers
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Confirm before destructive actions (cancel appointment).
+  // Confirm before destructive actions (e.g. cancel appointment).
   document.querySelectorAll("[data-confirm]").forEach((form) => {
     form.addEventListener("submit", (e) => {
       const msg = form.getAttribute("data-confirm");
@@ -12,13 +11,32 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Auto-dismiss flash alerts after a few seconds.
+  // Prevent duplicate submissions and rapid repeated execution
+  document.querySelectorAll("form").forEach((form) => {
+    form.addEventListener("submit", (e) => {
+      if (e.defaultPrevented) return;
+      if (form.hasAttribute("data-submitting")) {
+        e.preventDefault();
+        return;
+      }
+      const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+      if (submitBtn) {
+        form.setAttribute("data-submitting", "true");
+        // Re-enable after 5s safety timeout
+        setTimeout(() => {
+          form.removeAttribute("data-submitting");
+        }, 5000);
+      }
+    });
+  });
+
+  // Auto-dismiss flash alerts smoothly
   document.querySelectorAll(".mt-alert").forEach((alertEl) => {
     setTimeout(() => {
-      alertEl.style.transition = "opacity 0.4s ease";
+      alertEl.style.transition = "opacity 0.3s ease";
       alertEl.style.opacity = "0";
-      setTimeout(() => alertEl.remove(), 400);
-    }, 5000);
+      setTimeout(() => alertEl.remove(), 300);
+    }, 4500);
   });
 
   // Mobile navigation drawer toggle
@@ -85,30 +103,29 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Interactive client-side table search filter
+  // Interactive client-side table search filter (debounced with requestAnimationFrame)
   document.querySelectorAll("[data-table-filter]").forEach((input) => {
+    let rafId = null;
     input.addEventListener("input", () => {
-      const targetSelector = input.getAttribute("data-table-filter");
-      const targetTable = document.querySelector(targetSelector);
-      if (!targetTable) return;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const targetSelector = input.getAttribute("data-table-filter");
+        const targetTable = document.querySelector(targetSelector);
+        if (!targetTable) return;
 
-      const filterVal = input.value.toLowerCase().trim();
-      const rows = targetTable.querySelectorAll("tbody tr");
+        const filterVal = input.value.toLowerCase().trim();
+        const rows = targetTable.querySelectorAll("tbody tr");
 
-      rows.forEach((row) => {
-        const text = row.textContent.toLowerCase();
-        if (text.includes(filterVal)) {
-          row.style.display = "";
-        } else {
-          row.style.display = "none";
-        }
+        rows.forEach((row) => {
+          const text = row.textContent.toLowerCase();
+          row.style.display = text.includes(filterVal) ? "" : "none";
+        });
       });
     });
   });
 
   // Direct File-Preview Cleaner & Resolver (runs when double-clicked in File Explorer)
   if (window.location.protocol === "file:") {
-    // 1. Resolve any images with url_for paths
     document.querySelectorAll("img").forEach((img) => {
       const src = img.getAttribute("src") || "";
       if (src.includes("url_for") || src.startsWith("{{")) {
@@ -119,7 +136,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // 2. Resolve navigation links to local template files
     document.querySelectorAll("a").forEach((a) => {
       const href = a.getAttribute("href") || "";
       if (href.includes("url_for") || href.startsWith("{{")) {
@@ -140,7 +156,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // 3. Clean raw Jinja2 template tags from text nodes
     const walker = document.createTreeWalker(
       document.body || document.documentElement,
       NodeFilter.SHOW_TEXT,
@@ -171,5 +186,3 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
-
-

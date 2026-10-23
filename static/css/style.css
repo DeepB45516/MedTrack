@@ -3,7 +3,6 @@
    Color System: Deep Slate Navy, Royal Clinical Blue, Sky Cyan, Pristine Slate
    Typography: Fraunces (clinical editorial serif) + Inter (precision UI sans)
    ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
   /* Primary Clinical Slate Palette */
@@ -583,86 +582,6 @@ h1, h2, h3, h4, .mt-display {
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
-}
-
-/* ==========================================================================
-   Public Landing Page
-   ========================================================================== */
-.mt-trust-banner {
-  background: var(--mt-teal-950);
-  color: #B2D5CE;
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 10px 0;
-  overflow: hidden;
-  position: relative;
-  white-space: nowrap;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  user-select: none;
-}
-
-.mt-trust-banner::before,
-.mt-trust-banner::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 48px;
-  z-index: 2;
-  pointer-events: none;
-}
-.mt-trust-banner::before {
-  left: 0;
-  background: linear-gradient(to right, var(--mt-teal-950), transparent);
-}
-.mt-trust-banner::after {
-  right: 0;
-  background: linear-gradient(to left, var(--mt-teal-950), transparent);
-}
-
-.mt-ticker-track {
-  display: flex;
-  width: max-content;
-  animation: mtTickerSlide 24s linear infinite;
-}
-
-.mt-ticker-track:hover {
-  animation-play-state: paused;
-}
-
-.mt-ticker-content {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  padding-right: 28px;
-  flex-shrink: 0;
-}
-
-.mt-ticker-content span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mt-ticker-content i {
-  color: var(--mt-mint-400);
-  font-size: 0.95rem;
-}
-
-.mt-ticker-dot {
-  color: rgba(178, 213, 206, 0.35);
-  font-size: 0.9rem;
-  user-select: none;
-}
-
-@keyframes mtTickerSlide {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
 }
 
 /* ==========================================================================

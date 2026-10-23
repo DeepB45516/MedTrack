@@ -69,10 +69,15 @@ CREATE TABLE IF NOT EXISTS notifications (
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments (patient_id);
-CREATE INDEX IF NOT EXISTS idx_appointments_doctor ON appointments (doctor_id);
-CREATE INDEX IF NOT EXISTS idx_diagnoses_patient ON diagnoses (patient_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments (patient_id, appointment_date DESC);
+CREATE INDEX IF NOT EXISTS idx_appointments_doctor ON appointments (doctor_id, appointment_date DESC);
+CREATE INDEX IF NOT EXISTS idx_appointments_conflict ON appointments (doctor_id, appointment_date, appointment_time, status);
+CREATE INDEX IF NOT EXISTS idx_appointments_created ON appointments (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_diagnoses_patient ON diagnoses (patient_id, uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_diagnoses_doctor ON diagnoses (doctor_id, uploaded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications (user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications (user_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 """
 
 

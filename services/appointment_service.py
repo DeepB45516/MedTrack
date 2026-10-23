@@ -3,6 +3,7 @@ Appointment business logic: booking, status transitions, and the
 doctor-can-only-see-their-own-patients access rule.
 """
 from datetime import datetime
+from flask import g
 
 from database.database import query_db, execute_db
 from services.notification_service import notify
@@ -31,6 +32,19 @@ def get_doctor(doctor_id):
         (doctor_id,),
         one=True,
     )
+
+
+def get_doctor_by_user_id(doctor_user_id):
+    """Retrieve doctor record by user_id with request-scoped caching."""
+    cache_key = f"_doctor_user_{doctor_user_id}"
+    if hasattr(g, cache_key):
+        return getattr(g, cache_key)
+    doctor = query_db("SELECT id FROM doctors WHERE user_id = ?", (doctor_user_id,), one=True)
+    try:
+        setattr(g, cache_key, doctor)
+    except Exception:
+        pass
+    return doctor
 
 
 def validate_booking(doctor_id, appointment_date, appointment_time):
@@ -105,66 +119,74 @@ def user_can_access_appointment(user, appointment):
     if user["role"] == "patient":
         return appointment["patient_id"] == user["id"]
     if user["role"] == "doctor":
-        doctor = query_db("SELECT id FROM doctors WHERE user_id = ?", (user["id"],), one=True)
+        doctor = get_doctor_by_user_id(user["id"])
         return doctor is not None and appointment["doctor_id"] == doctor["id"]
     return False
 
 
-def list_patient_appointments(patient_id, status=None):
+def list_patient_appointments(patient_id, status=None, limit=None):
     if status:
-        return query_db(
-            """SELECT a.*, du.name AS doctor_name, d.specialization
-               FROM appointments a JOIN doctors d ON d.id = a.doctor_id JOIN users du ON du.id = d.user_id
-               WHERE a.patient_id = ? AND a.status = ? ORDER BY a.appointment_date DESC""",
-            (patient_id, status),
-        )
-    return query_db(
-        """SELECT a.*, du.name AS doctor_name, d.specialization
-           FROM appointments a JOIN doctors d ON d.id = a.doctor_id JOIN users du ON du.id = d.user_id
-           WHERE a.patient_id = ? ORDER BY a.appointment_date DESC""",
-        (patient_id,),
-    )
+        query = """SELECT a.*, du.name AS doctor_name, d.specialization
+                   FROM appointments a JOIN doctors d ON d.id = a.doctor_id JOIN users du ON du.id = d.user_id
+                   WHERE a.patient_id = ? AND a.status = ? ORDER BY a.appointment_date DESC"""
+        params = [patient_id, status]
+    else:
+        query = """SELECT a.*, du.name AS doctor_name, d.specialization
+                   FROM appointments a JOIN doctors d ON d.id = a.doctor_id JOIN users du ON du.id = d.user_id
+                   WHERE a.patient_id = ? ORDER BY a.appointment_date DESC"""
+        params = [patient_id]
+
+    if limit:
+        query += f" LIMIT {int(limit)}"
+    return query_db(query, tuple(params))
 
 
-def list_doctor_appointments(doctor_user_id, status=None):
-    doctor = query_db("SELECT id FROM doctors WHERE user_id = ?", (doctor_user_id,), one=True)
+def list_doctor_appointments(doctor_user_id, status=None, limit=None):
+    doctor = get_doctor_by_user_id(doctor_user_id)
     if doctor is None:
         return []
     base = """SELECT a.*, pu.name AS patient_name, pu.email AS patient_email
               FROM appointments a JOIN users pu ON pu.id = a.patient_id
               WHERE a.doctor_id = ?"""
+    params = [doctor["id"]]
     if status:
-        return query_db(base + " AND a.status = ? ORDER BY a.appointment_date", (doctor["id"], status))
-    return query_db(base + " ORDER BY a.appointment_date", (doctor["id"],))
+        base += " AND a.status = ? ORDER BY a.appointment_date"
+        params.append(status)
+    else:
+        base += " ORDER BY a.appointment_date"
+    if limit:
+        base += f" LIMIT {int(limit)}"
+    return query_db(base, tuple(params))
 
 
-def search_appointments(user, query_text):
+def search_appointments(user, query_text, limit=100):
     like = f"%{query_text}%"
+    lim = f" LIMIT {int(limit)}" if limit else ""
     if user["role"] == "patient":
         return query_db(
-            """SELECT a.*, du.name AS doctor_name, d.specialization
+            f"""SELECT a.*, du.name AS doctor_name, d.specialization
                FROM appointments a JOIN doctors d ON d.id = a.doctor_id JOIN users du ON du.id = d.user_id
                WHERE a.patient_id = ? AND (du.name LIKE ? OR a.reason LIKE ? OR a.status LIKE ?)
-               ORDER BY a.appointment_date DESC""",
+               ORDER BY a.appointment_date DESC{lim}""",
             (user["id"], like, like, like),
         )
     if user["role"] == "doctor":
-        doctor = query_db("SELECT id FROM doctors WHERE user_id = ?", (user["id"],), one=True)
+        doctor = get_doctor_by_user_id(user["id"])
         if doctor is None:
             return []
         return query_db(
-            """SELECT a.*, pu.name AS patient_name, pu.email AS patient_email
+            f"""SELECT a.*, pu.name AS patient_name, pu.email AS patient_email
                FROM appointments a JOIN users pu ON pu.id = a.patient_id
                WHERE a.doctor_id = ? AND (pu.name LIKE ? OR a.reason LIKE ? OR a.status LIKE ?)
-               ORDER BY a.appointment_date DESC""",
+               ORDER BY a.appointment_date DESC{lim}""",
             (doctor["id"], like, like, like),
         )
     return query_db(
-        """SELECT a.*, pu.name AS patient_name, du.name AS doctor_name
+        f"""SELECT a.*, pu.name AS patient_name, du.name AS doctor_name
            FROM appointments a JOIN users pu ON pu.id = a.patient_id
            JOIN doctors d ON d.id = a.doctor_id JOIN users du ON du.id = d.user_id
            WHERE pu.name LIKE ? OR du.name LIKE ? OR a.status LIKE ?
-           ORDER BY a.appointment_date DESC""",
+           ORDER BY a.appointment_date DESC{lim}""",
         (like, like, like),
     )
 
@@ -210,7 +232,7 @@ def dashboard_counts_patient(patient_id):
 
 
 def dashboard_counts_doctor(doctor_user_id):
-    doctor = query_db("SELECT id FROM doctors WHERE user_id = ?", (doctor_user_id,), one=True)
+    doctor = get_doctor_by_user_id(doctor_user_id)
     if doctor is None:
         return {"today": 0, "pending": 0, "completed": 0, "total_patients": 0}
     row = query_db(

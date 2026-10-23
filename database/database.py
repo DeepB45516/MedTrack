@@ -14,9 +14,13 @@ from flask import g, current_app
 def get_db():
     """Return a request-scoped SQLite connection with row access by name."""
     if "db" not in g:
-        g.db = sqlite3.connect(current_app.config["DATABASE_PATH"])
+        g.db = sqlite3.connect(current_app.config["DATABASE_PATH"], timeout=10)
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
+        g.db.execute("PRAGMA journal_mode = WAL")
+        g.db.execute("PRAGMA synchronous = NORMAL")
+        g.db.execute("PRAGMA cache_size = -64000")
+        g.db.execute("PRAGMA temp_store = MEMORY")
     return g.db
 
 

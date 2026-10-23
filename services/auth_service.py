@@ -10,7 +10,7 @@ not application login.
 import functools
 import secrets
 import requests
-from flask import session, redirect, url_for, request, flash, current_app
+from flask import session, redirect, url_for, request, flash, current_app, g
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from database.database import query_db, execute_db
@@ -19,10 +19,17 @@ from database.database import query_db, execute_db
 # ---------------------------------------------------------------------
 # Google OAuth helpers
 # ---------------------------------------------------------------------
+_GOOGLE_PROVIDER_CFG = None
+
+
 def get_google_provider_cfg():
+    global _GOOGLE_PROVIDER_CFG
+    if _GOOGLE_PROVIDER_CFG is not None:
+        return _GOOGLE_PROVIDER_CFG
     resp = requests.get(current_app.config["GOOGLE_DISCOVERY_URL"], timeout=5)
     resp.raise_for_status()
-    return resp.json()
+    _GOOGLE_PROVIDER_CFG = resp.json()
+    return _GOOGLE_PROVIDER_CFG
 
 
 def build_auth_state():
@@ -131,6 +138,8 @@ def authenticate_manual_user(email, password):
 
     execute_db("UPDATE users SET last_login = datetime('now') WHERE id = ?", (user["id"],))
     user = query_db("SELECT * FROM users WHERE id = ?", (user["id"],), one=True)
+    if hasattr(g, "_current_user"):
+        g._current_user = user
     return user, None
 
 
@@ -162,6 +171,8 @@ def find_or_create_user(google_id, name, email, profile_picture):
             (name, profile_picture, user["id"]),
         )
         user = query_db("SELECT * FROM users WHERE id = ?", (user["id"],), one=True)
+    if hasattr(g, "_current_user"):
+        g._current_user = user
     return user
 
 
@@ -169,7 +180,12 @@ def get_current_user():
     user_id = session.get("user_id")
     if not user_id:
         return None
-    return query_db("SELECT * FROM users WHERE id = ?", (user_id,), one=True)
+    if hasattr(g, "_current_user") and g._current_user is not None:
+        if g._current_user["id"] == user_id:
+            return g._current_user
+    user = query_db("SELECT * FROM users WHERE id = ?", (user_id,), one=True)
+    g._current_user = user
+    return user
 
 
 def log_in_user(user_row):
@@ -177,10 +193,13 @@ def log_in_user(user_row):
     session.permanent = True
     session["user_id"] = user_row["id"]
     session["role"] = user_row["role"]
+    g._current_user = user_row
 
 
 def log_out_user():
     session.clear()
+    if hasattr(g, "_current_user"):
+        g._current_user = None
 
 
 # ---------------------------------------------------------------------
