@@ -82,6 +82,7 @@ def _secret_key():
 
 class Config:
     IS_VERCEL = IS_VERCEL
+    SEND_FILE_MAX_AGE_DEFAULT = 86400  # static files may be cached by the browser for a day
     SECRET_KEY = _secret_key()
 
     # --- Database -----------------------------------------------------

@@ -29,6 +29,26 @@ def create_app(test_config=None):
     db_module.init_app(app)
     app.jinja_env.filters["dr"] = with_dr
 
+    # Cache-busting: /static/x.css?v=<content hash>. A changed file gets a new URL, so
+    # browsers/CDN can cache static files aggressively without ever serving a stale one.
+    _static_hashes = {}
+
+    @app.url_defaults
+    def add_static_version(endpoint, values):
+        if endpoint != "static" or "v" in values or not values.get("filename"):
+            return
+        name = values["filename"]
+        if name not in _static_hashes:
+            try:
+                import hashlib
+                path = os.path.join(app.static_folder, name)
+                with open(path, "rb") as fh:
+                    _static_hashes[name] = hashlib.md5(fh.read()).hexdigest()[:10]
+            except OSError:
+                _static_hashes[name] = None
+        if _static_hashes[name]:
+            values["v"] = _static_hashes[name]
+
     if not db_module.use_postgres(app.config):
         os.makedirs(os.path.dirname(app.config["DATABASE_PATH"]), exist_ok=True)
         os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -61,7 +81,10 @@ def register_context_processors(app):
     @app.context_processor
     def inject_globals():
         user = auth_service.get_current_user()
-        unread = notification_service.unread_count(user["id"]) if user else 0
+        unread = 0
+        if user:
+            # the unread count arrives with the user row (one query instead of two)
+            unread = user["unread_count"] if "unread_count" in user.keys() else notification_service.unread_count(user["id"])
         no_shared_db = bool(app.config.get("IS_VERCEL")) and not db_module.use_postgres()
         return {"current_user": user, "unread_notifications": unread, "storage_warning": no_shared_db}
 

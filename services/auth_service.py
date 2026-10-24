@@ -193,7 +193,12 @@ def get_current_user():
 
     user = None
     if user_id:
-        user = query_db("SELECT * FROM users WHERE id = ?", (user_id,), one=True)
+        # user row + unread notification count in a single round trip
+        user = query_db(
+            """SELECT u.*, (SELECT COUNT(*) FROM notifications n
+                            WHERE n.user_id = u.id AND n.is_read = 0) AS unread_count
+               FROM users u WHERE u.id = ?""",
+            (user_id,), one=True)
 
     # Fallback: look the account up by email (never create accounts from a cookie).
     if user is None and user_email:

@@ -1,13 +1,25 @@
 {
   "version": 2,
+  "regions": ["sin1"],
   "builds": [
     {
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": { "includeFiles": ["templates/**", "static/**"] }
-    }
+    },
+    { "src": "static/**", "use": "@vercel/static" }
   ],
   "routes": [
+    {
+      "src": "/static/vendor/(.*)",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" },
+      "dest": "/static/vendor/$1"
+    },
+    {
+      "src": "/static/(.*)",
+      "headers": { "cache-control": "public, max-age=86400, stale-while-revalidate=604800" },
+      "dest": "/static/$1"
+    },
     { "src": "/(.*)", "dest": "/api/index.py" }
   ]
 }

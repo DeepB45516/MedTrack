@@ -18,6 +18,7 @@ import ipaddress
 import socket
 import sqlite3
 import struct
+import threading
 import time
 from collections import namedtuple
 
@@ -121,6 +122,40 @@ def resolve_ipv4(host, attempts=4):
     return ip
 
 
+# One long-lived connection per process, reused by every request. Opening a connection
+# (DNS + TCP + TLS + auth) costs several round trips, which dominates page time when the
+# database is a network hop away. psycopg connections are thread-safe, and autocommit
+# keeps each statement independent.
+_SHARED = {}
+_SHARED_LOCK = threading.Lock()
+_IDLE_PING_AFTER = 15  # seconds idle before we verify the connection is still alive
+
+
+def _shared_postgres(config, force_new=False):
+    key = config["POSTGRES_URL"]
+    with _SHARED_LOCK:
+        entry = _SHARED.get(key)
+        if entry and not force_new:
+            conn, last_used = entry
+            alive = not conn.closed and not conn.broken
+            if alive and time.monotonic() - last_used > _IDLE_PING_AFTER:
+                try:
+                    conn.execute("SELECT 1")  # server/pooler may have dropped an idle connection
+                except Exception:
+                    alive = False
+            if alive:
+                _SHARED[key] = (conn, time.monotonic())
+                return conn
+        if entry:
+            try:
+                entry[0].close()
+            except Exception:
+                pass
+        conn = _connect_postgres(config)
+        _SHARED[key] = (conn, time.monotonic())
+        return conn
+
+
 _NO_RETRY_MARKERS = ("password authentication failed", "tenant or user not found", "does not exist",
                      "no pg_hba.conf", "authentication failed")
 
@@ -167,7 +202,8 @@ class Database:
         if self.postgres:
             if psycopg is None:
                 raise RuntimeError("DATABASE_URL points to Postgres but 'psycopg' is not installed.")
-            self.raw = _connect_postgres(config)
+            self.config = config
+            self.raw = _shared_postgres(config)
         else:
             self.raw = sqlite3.connect(config["DATABASE_PATH"], timeout=10)
             self.raw.row_factory = sqlite3.Row
@@ -183,9 +219,16 @@ class Database:
 
     def query(self, sql, args=()):
         if self.postgres:
-            with self.raw.cursor() as cur:
-                cur.execute(self._sql(sql), tuple(args))
-                return cur.fetchall()
+            for attempt in (0, 1):
+                try:
+                    with self.raw.cursor() as cur:
+                        cur.execute(self._sql(sql), tuple(args))
+                        return cur.fetchall()
+                except (psycopg.OperationalError, psycopg.InterfaceError):
+                    if attempt:
+                        raise
+                    # connection was dropped (e.g. database woke from idle): reconnect, retry the read
+                    self.raw = _shared_postgres(self.config, force_new=True)
         cur = self.raw.execute(sql, tuple(args))
         rows = cur.fetchall()
         cur.close()
@@ -197,13 +240,19 @@ class Database:
             is_insert = stmt.lstrip()[:6].upper() == "INSERT"
             if is_insert and "RETURNING" not in stmt.upper():
                 stmt += " RETURNING id"
-            with self.raw.cursor() as cur:
-                cur.execute(stmt, tuple(args))
-                last_id = None
-                if is_insert:
-                    row = cur.fetchone()
-                    last_id = row["id"] if row else None
-                return Result(last_id, cur.rowcount)
+            try:
+                with self.raw.cursor() as cur:
+                    cur.execute(stmt, tuple(args))
+                    last_id = None
+                    if is_insert:
+                        row = cur.fetchone()
+                        last_id = row["id"] if row else None
+                    return Result(last_id, cur.rowcount)
+            except (psycopg.OperationalError, psycopg.InterfaceError):
+                # never auto-retry a write; just make sure the next call gets a fresh connection
+                if self.raw.closed or self.raw.broken:
+                    self.raw = _shared_postgres(self.config, force_new=True)
+                raise
         cur = self.raw.execute(sql, tuple(args))
         self.raw.commit()
         res = Result(cur.lastrowid, cur.rowcount)
@@ -211,6 +260,8 @@ class Database:
         return res
 
     def close(self):
+        if self.postgres:
+            return  # the connection is shared by the whole process; keep it open
         try:
             self.raw.close()
         except Exception:
