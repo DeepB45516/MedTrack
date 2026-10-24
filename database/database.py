@@ -14,7 +14,11 @@ backends are supported behind the same helpers (query_db / execute_db):
 Service code always writes SQL with `?` placeholders; they are translated
 for Postgres here.
 """
+import ipaddress
+import socket
 import sqlite3
+import struct
+import time
 from collections import namedtuple
 
 from flask import g, current_app
@@ -34,6 +38,122 @@ except Exception:  # pragma: no cover - psycopg not installed locally
 IntegrityErrors = (sqlite3.IntegrityError,) + _PG_INTEGRITY
 
 
+# --------------------------------------------------------------------------
+# Hostname resolution for Postgres.
+# Some serverless runtimes fail DNS lookups intermittently (e.g. "[Errno 16] Device or
+# resource busy") or hand back IPv6 addresses the platform cannot reach. We therefore
+# resolve the database host ourselves: IPv4 only, with retries, a direct DNS query as a
+# last resort, and a per-process cache. The resolved IP is passed as `hostaddr`, while
+# `host` is kept so TLS/SNI still use the real name.
+# --------------------------------------------------------------------------
+_IP_CACHE = {}
+DNS_SERVERS = (("1.1.1.1", 53), ("8.8.8.8", 53))
+
+
+def _skip_resolution(host):
+    if not host or host.startswith("/"):
+        return True
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return False
+
+
+def _dns_query_a(host, servers=None, timeout=2.0):
+    """Minimal UDP DNS client: returns the first IPv4 (A record) for `host`, or None."""
+    qid = int.from_bytes(__import__("os").urandom(2), "big")
+    question = b"".join(bytes([len(p)]) + p.encode("ascii") for p in host.rstrip(".").split(".")) + b"\x00"
+    packet = struct.pack(">HHHHHH", qid, 0x0100, 1, 0, 0, 0) + question + struct.pack(">HH", 1, 1)
+
+    def skip_name(data, pos):
+        while True:
+            length = data[pos]
+            if length == 0:
+                return pos + 1
+            if length & 0xC0 == 0xC0:
+                return pos + 2
+            pos += 1 + length
+
+    for server in (servers or DNS_SERVERS):
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(timeout)
+            sock.sendto(packet, server)
+            data, _ = sock.recvfrom(4096)
+            if len(data) < 12 or struct.unpack(">H", data[:2])[0] != qid:
+                continue
+            qd, an = struct.unpack(">HH", data[4:8])
+            pos = 12
+            for _ in range(qd):
+                pos = skip_name(data, pos) + 4
+            for _ in range(an):
+                pos = skip_name(data, pos)
+                rtype, _cls, _ttl, rdlen = struct.unpack(">HHIH", data[pos:pos + 10])
+                pos += 10
+                if rtype == 1 and rdlen == 4:
+                    return socket.inet_ntoa(data[pos:pos + 4])
+                pos += rdlen
+        except (OSError, IndexError, struct.error):
+            continue
+        finally:
+            if sock is not None:
+                sock.close()
+    return None
+
+
+def resolve_ipv4(host, attempts=4):
+    """Resolve `host` to an IPv4 address (cached), or None if every method failed."""
+    if host in _IP_CACHE:
+        return _IP_CACHE[host]
+    ip = None
+    for n in range(attempts):
+        try:
+            ip = socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
+            break
+        except OSError:
+            time.sleep(0.25 * (n + 1))
+    if ip is None:
+        ip = _dns_query_a(host)
+    if ip:
+        _IP_CACHE[host] = ip
+    return ip
+
+
+_NO_RETRY_MARKERS = ("password authentication failed", "tenant or user not found", "does not exist",
+                     "no pg_hba.conf", "authentication failed")
+
+
+def _connect_postgres(config):
+    from psycopg.conninfo import conninfo_to_dict
+
+    url = config["POSTGRES_URL"]
+    extra = {}
+    host = conninfo_to_dict(url).get("host")
+    if not _skip_resolution(host):
+        ip = resolve_ipv4(host)
+        if ip:
+            extra["hostaddr"] = ip
+
+    last = None
+    for n in range(3):
+        try:
+            # autocommit: every statement is its own transaction (no aborted-transaction
+            # state to recover from). prepare_threshold=None keeps PgBouncer-style
+            # poolers (Neon / Supabase / Vercel Postgres) happy.
+            return psycopg.connect(
+                url, row_factory=dict_row, autocommit=True, prepare_threshold=None,
+                connect_timeout=10, **extra,
+            )
+        except psycopg.OperationalError as exc:
+            last = exc
+            if any(m in str(exc).lower() for m in _NO_RETRY_MARKERS):
+                break
+            time.sleep(0.4 * (n + 1))
+    raise last
+
+
 def use_postgres(config=None):
     cfg = config if config is not None else current_app.config
     return cfg.get("DB_BACKEND") == "postgres"
@@ -47,16 +167,7 @@ class Database:
         if self.postgres:
             if psycopg is None:
                 raise RuntimeError("DATABASE_URL points to Postgres but 'psycopg' is not installed.")
-            # autocommit: every statement is its own transaction (no aborted-transaction
-            # state to recover from). prepare_threshold=None keeps PgBouncer-style
-            # poolers (Neon / Supabase / Vercel Postgres) happy.
-            self.raw = psycopg.connect(
-                config["POSTGRES_URL"],
-                row_factory=dict_row,
-                autocommit=True,
-                prepare_threshold=None,
-                connect_timeout=10,
-            )
+            self.raw = _connect_postgres(config)
         else:
             self.raw = sqlite3.connect(config["DATABASE_PATH"], timeout=10)
             self.raw.row_factory = sqlite3.Row

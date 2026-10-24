@@ -10,3 +10,4 @@ database/medtrack.db
 uploads/diagnosis/*
 venv
 .venv
+vercel.env

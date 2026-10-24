@@ -12,3 +12,4 @@ venv/
 # Vercel
 .vercel/
 *.pem
+vercel.env

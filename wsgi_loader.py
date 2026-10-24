@@ -22,6 +22,11 @@ def _fallback(exc):
 
     hints = []
     low = msg.lower()
+    if "errno 16" in low or "name or service not known" in low or "temporary failure in name resolution" in low:
+        hints.append("The server could not look up the database hostname (a DNS problem, usually temporary). "
+                     "Reload the page; if it persists, check the host in DATABASE_URL is spelled exactly as "
+                     "Supabase shows it and is the <b>pooler</b> host (<code>...pooler.supabase.com</code>), "
+                     "not <code>db.&lt;ref&gt;.supabase.co</code>, which is IPv6-only and unreachable from Vercel.")
     if "operational" in type(exc).__name__.lower() or any(w in low for w in ("connect", "password", "tenant")):
         hints.append("The database connection failed. Check DATABASE_URL in Vercel &rarr; Settings &rarr; "
                      "Environment Variables: correct password (URL-encode special characters), the "
