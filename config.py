@@ -50,6 +50,8 @@ def _find_postgres_url():
     from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
     for key in ("DATABASE_URL", "POSTGRES_URL", "POSTGRES_URL_NON_POOLING"):
         url = (os.environ.get(key) or "").strip()
+        if "YOUR_" in url:  # an unedited placeholder from vercel.env - ignore it
+            continue
         if url.startswith(("postgres://", "postgresql://")):
             parts = urlsplit(url.replace("postgres://", "postgresql://", 1))
             query = [(k, v) for k, v in parse_qsl(parts.query) if k not in _PG_DROP_PARAMS]

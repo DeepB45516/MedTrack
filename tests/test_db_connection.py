@@ -93,3 +93,12 @@ def test_postgres_connect_passes_resolved_ipv4_as_hostaddr(monkeypatch):
     with pytest.raises(dbmod.psycopg.OperationalError):
         dbmod._connect_postgres({"POSTGRES_URL": "postgresql://u:p@db.example.com:6543/postgres"})
     assert captured["hostaddr"] == "192.0.2.10" and captured["prepare_threshold"] is None
+
+
+def test_unedited_placeholder_database_url_is_ignored(monkeypatch):
+    import config
+    monkeypatch.setenv("DATABASE_URL", "postgresql://postgres.YOUR_PROJECT_REF:YOUR_PASSWORD@h.pooler.supabase.com:6543/postgres")
+    monkeypatch.setenv("POSTGRES_URL", "postgres://neon:real@ep-cool-1.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
+    url = config._find_postgres_url()
+    assert "neon.tech" in url and "YOUR_" not in url and url.startswith("postgresql://")
+    assert "channel_binding=require" in url and "sslmode=require" in url
